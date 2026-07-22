@@ -1,0 +1,45 @@
+name: FEC Outside Spending — Failsafe Pull
+
+# Runs twice daily as a backup to the continuous local Mac process, which
+# only polls while the laptop is awake with the lid open. This job pulls
+# independently on GitHub's servers regardless of the Mac's state.
+
+on:
+  schedule:
+    - cron: "0 11,21 * * *"  # 7am/5pm EDT (UTC-4). After Nov 2 DST ends, this
+                              # runs 6am/4pm EST (UTC-5) until the cron is updated.
+  workflow_dispatch:          # allow manual runs from GitHub UI
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+
+    env:
+      FEC_API_KEY: ${{ secrets.FEC_API_KEY }}
+      WORKDIR: "Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526"
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r "$WORKDIR/code/requirements.txt"
+
+      - name: Write Google service account credentials
+        run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > "$WORKDIR/service-account.json"
+
+      - name: Run outside-spending pull
+        run: |
+          cd "$WORKDIR/code"
+          python3 outside_spending.py \
+            --candidates candidates.csv \
+            --output-dir '..' \
+            --cycle 2026 \
+            --worksheet "outside_spend_TEST_Q2" \
+            --credentials "../service-account.json" \
+            --once

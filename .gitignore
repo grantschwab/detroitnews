@@ -7,3 +7,20 @@ __pycache__/
 dist/
 build/
 .DS_Store
+
+# FEC outside-spending pipeline (Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/)
+# -- credentials, runtime state, and pull output; only the code + candidates.csv are tracked.
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/app-template-access-*.json
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/raw/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/raw_q1/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/raw_preprimary/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/output/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/*.log
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/*.stop
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.monitor_state*.json
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.monitor_preprimary_state.json
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.se_contest_cache/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.se_filing_cache/
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.known_spenders.json
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/.committee_names.json
+Desktop/Detroit News/Data/campaign_finance/instance/FEC_071526/code/__pycache__/
