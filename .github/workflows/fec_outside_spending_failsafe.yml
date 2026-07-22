@@ -33,6 +33,22 @@ jobs:
       - name: Write Google service account credentials
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > "$WORKDIR/service-account.json"
 
+      # groupspend.py/overallspend.py need campaign_finance_2026_Q2.csv
+      # (written by monitor.py) to know campaign spend -- on a fresh
+      # checkout that file doesn't exist yet, so without this step the
+      # Flourish tabs' campaign totals silently zero out.
+      - name: Run candidate committee pull (Q2)
+        run: |
+          cd "$WORKDIR/code"
+          python3 monitor.py \
+            --candidates candidates.csv \
+            --output-dir '..' \
+            --cycle 2026 \
+            --quarter Q2 \
+            --worksheet "cands_Q2" \
+            --credentials "../service-account.json" \
+            --once
+
       - name: Run outside-spending pull
         run: |
           cd "$WORKDIR/code"
