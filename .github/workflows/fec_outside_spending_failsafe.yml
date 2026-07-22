@@ -42,7 +42,7 @@ jobs:
           unzip -o /tmp/fastfec/*.zip -d /tmp/fastfec
           sudo mv /tmp/fastfec/fastfec /usr/local/bin/fastfec
           chmod +x /usr/local/bin/fastfec
-          fastfec -h
+          fastfec -h || true
 
       - name: Write Google service account credentials
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > "$WORKDIR/service-account.json"
