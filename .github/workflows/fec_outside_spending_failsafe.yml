@@ -47,6 +47,28 @@ jobs:
       - name: Write Google service account credentials
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > "$WORKDIR/service-account.json"
 
+      # Without this, every scheduled run starts from a totally clean
+      # checkout -- no prior downloaded filings, no per-contest fallback
+      # cache. That means a single transient API failure DURING a
+      # scheduled run has nothing to fall back on and can push zeroed
+      # data live, uncorrected until the next scheduled run (up to ~10
+      # hours later) if the local Mac process isn't also running to
+      # overwrite it sooner. Restoring these directories gives this job
+      # the same fallback protection the local process already has.
+      - name: Restore FEC pull cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ env.WORKDIR }}/raw
+            ${{ env.WORKDIR }}/.monitor_state.json
+            ${{ env.WORKDIR }}/.se_contest_cache
+            ${{ env.WORKDIR }}/.se_filing_cache
+            ${{ env.WORKDIR }}/.known_spenders.json
+            ${{ env.WORKDIR }}/.committee_names.json
+          key: fec-pull-cache-${{ github.run_id }}
+          restore-keys: |
+            fec-pull-cache-
+
       # groupspend.py/overallspend.py need campaign_finance_2026_Q2.csv
       # (written by monitor.py) to know campaign spend -- on a fresh
       # checkout that file doesn't exist yet, so without this step the
@@ -73,3 +95,16 @@ jobs:
             --worksheet "outside_spend_TEST_Q2" \
             --credentials "../service-account.json" \
             --once
+
+      - name: Save FEC pull cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ${{ env.WORKDIR }}/raw
+            ${{ env.WORKDIR }}/.monitor_state.json
+            ${{ env.WORKDIR }}/.se_contest_cache
+            ${{ env.WORKDIR }}/.se_filing_cache
+            ${{ env.WORKDIR }}/.known_spenders.json
+            ${{ env.WORKDIR }}/.committee_names.json
+          key: fec-pull-cache-${{ github.run_id }}
