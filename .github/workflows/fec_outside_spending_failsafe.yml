@@ -30,6 +30,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r "$WORKDIR/code/requirements.txt"
 
+      # Both monitor.py (parses downloaded filings into CSV) and
+      # outside_spending.py's RSS fast-path need the fastfec binary. It's
+      # only installed locally via Homebrew, so the runner needs its own copy.
+      - name: Install FastFEC
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo washingtonpost/FastFEC \
+            --pattern "fastfec-linux-gnu-x86_64-*.zip" --dir /tmp/fastfec --clobber
+          unzip -o /tmp/fastfec/*.zip -d /tmp/fastfec
+          sudo mv /tmp/fastfec/fastfec /usr/local/bin/fastfec
+          chmod +x /usr/local/bin/fastfec
+          fastfec -h
+
       - name: Write Google service account credentials
         run: echo '${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}' > "$WORKDIR/service-account.json"
 
