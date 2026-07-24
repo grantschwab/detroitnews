@@ -10,9 +10,11 @@ Flourish graphics alongside overallspend_chart's summary view:
   campaigns, for a reference table.
 
 Same pattern as overallspend.py: reads only the already-compiled output
-CSVs written by monitor.py (campaign_finance_2026_Q2.csv, ALL tab only)
-and outside_spending.py (outside_spending_2026.csv) -- no new API calls.
-Called at the end of each of those two scripts' own sheet-upload step.
+CSVs written by monitor_preprimary.py (campaign_finance_2026_preprimary.csv,
+ALL tab only -- 12-day pre-primary filings, more current than the Q2
+quarterly filing this replaced) and outside_spending.py
+(outside_spending_2026.csv) -- no new API calls. Called at the end of
+each of those two scripts' own sheet-upload step.
 """
 
 import csv
@@ -114,7 +116,10 @@ def _group_rows(output_dir):
 
 
 def _campaign_values(output_dir):
-    path = os.path.join(output_dir, "output", "campaign_finance_2026_Q2.csv")
+    """Cycle-to-date campaign expenditures from the 12-day pre-primary
+    (12P) filings -- more current than the Q2 quarterly filing this
+    replaced."""
+    path = os.path.join(output_dir, "output", "campaign_finance_2026_preprimary.csv")
     labels = {"stevens": "Stevens campaign", "elsayed": "El-Sayed campaign"}
     result = {"Stevens campaign": 0.0, "El-Sayed campaign": 0.0}
     if not os.path.exists(path):

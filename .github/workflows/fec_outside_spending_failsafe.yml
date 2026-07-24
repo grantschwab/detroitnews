@@ -60,7 +60,9 @@ jobs:
         with:
           path: |
             ${{ env.WORKDIR }}/raw
+            ${{ env.WORKDIR }}/raw_preprimary
             ${{ env.WORKDIR }}/.monitor_state.json
+            ${{ env.WORKDIR }}/.monitor_preprimary_state.json
             ${{ env.WORKDIR }}/.se_contest_cache
             ${{ env.WORKDIR }}/.se_filing_cache
             ${{ env.WORKDIR }}/.known_spenders.json
@@ -69,10 +71,8 @@ jobs:
           restore-keys: |
             fec-pull-cache-
 
-      # groupspend.py/overallspend.py need campaign_finance_2026_Q2.csv
-      # (written by monitor.py) to know campaign spend -- on a fresh
-      # checkout that file doesn't exist yet, so without this step the
-      # Flourish tabs' campaign totals silently zero out.
+      # Keeps the cands_Q2 tab itself current. No longer feeds the Flourish
+      # graphics tabs -- see the pre-primary step below for that.
       - name: Run candidate committee pull (Q2)
         run: |
           cd "$WORKDIR/code"
@@ -82,6 +82,21 @@ jobs:
             --cycle 2026 \
             --quarter Q2 \
             --worksheet "cands_Q2" \
+            --credentials "../service-account.json" \
+            --once
+
+      # groupspend.py/overallspend.py source campaign spend from
+      # campaign_finance_2026_preprimary.csv (written here) -- the 12-day
+      # pre-primary filing, more current than the Q2 quarterly filing.
+      # On a fresh checkout that file doesn't exist yet, so without this
+      # step the Flourish tabs' campaign totals silently zero out.
+      - name: Run pre-primary pull
+        run: |
+          cd "$WORKDIR/code"
+          python3 monitor_preprimary.py \
+            --candidates candidates.csv \
+            --output-dir '..' \
+            --worksheet "cands_preprimary" \
             --credentials "../service-account.json" \
             --once
 
@@ -102,7 +117,9 @@ jobs:
         with:
           path: |
             ${{ env.WORKDIR }}/raw
+            ${{ env.WORKDIR }}/raw_preprimary
             ${{ env.WORKDIR }}/.monitor_state.json
+            ${{ env.WORKDIR }}/.monitor_preprimary_state.json
             ${{ env.WORKDIR }}/.se_contest_cache
             ${{ env.WORKDIR }}/.se_filing_cache
             ${{ env.WORKDIR }}/.known_spenders.json

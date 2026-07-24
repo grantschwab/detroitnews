@@ -6,9 +6,11 @@ outside-group spend by support/oppose direction) and pushes it to the
 "overallspend_chart" Google Sheet tab, feeding a live-updating Flourish
 graphic.
 
-Reads only from the already-compiled output CSVs written by monitor.py
-(campaign_finance_2026_Q2.csv) and outside_spending.py (outside_spending_2026.csv)
--- no new API calls. Called at the end of each of those two scripts' own
+Reads only from the already-compiled output CSVs written by
+monitor_preprimary.py (campaign_finance_2026_preprimary.csv -- 12-day
+pre-primary filings, more current than the Q2 quarterly filing this
+replaced) and outside_spending.py (outside_spending_2026.csv) -- no new
+API calls. Called at the end of each of those two scripts' own
 sheet-upload step so this tab reflects whatever either pipeline most
 recently pulled.
 """
@@ -42,8 +44,10 @@ def _to_float(value):
 
 
 def _campaign_expenditures(output_dir):
-    """Cycle-to-date operating expenditures ('C Expenditures') for stevens/elsayed."""
-    path = os.path.join(output_dir, "output", "campaign_finance_2026_Q2.csv")
+    """Cycle-to-date operating expenditures ('C Expenditures') for stevens/elsayed,
+    from their 12-day pre-primary (12P) filings -- more current than the Q2
+    quarterly filing this replaced."""
+    path = os.path.join(output_dir, "output", "campaign_finance_2026_preprimary.csv")
     result = {"stevens": 0.0, "elsayed": 0.0}
     if not os.path.exists(path):
         return result
