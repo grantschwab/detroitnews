@@ -79,7 +79,7 @@ OUTPUT_COLUMNS = [
     "Support/Oppose", "Outside Group",
     "2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Jul 1 Spent",
     "SUM CandCategory", "SUM GroupAll", "SELFREPORT YTD Spend",
-    "# Transactions", "Most Recent Expenditure",
+    "# Transactions", "Most Recent Filing",
     "FEC Committee Link", "FEC Most Recent Report Link",
 ]
 
@@ -253,6 +253,7 @@ def parse_se_filing(file_number, form_type, cache_dir):
                     "support_oppose_indicator": row.get("support_oppose_code"),
                     "expenditure_amount": row.get("expenditure_amount"),
                     "expenditure_date": row.get("disbursement_date") or row.get("dissemination_date"),
+                    "sign_date": row.get("date_signed"),
                     "payee_name": payee,
                     "memoed_subtotal": False,
                     "is_notice": is_notice,
@@ -519,13 +520,31 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
             g["name"] = committee.get("name", committee.get("committee_id", "UNKNOWN"))
             amount = float(t.get("expenditure_amount") or 0)
             date = t.get("expenditure_date") or ""
+            # "Date Signed" (independent_sign_date / date_signed), NOT
+            # expenditure_date, for "most recent" tracking below.
+            # expenditure_date -- both from the FEC API and FastFEC's raw
+            # SE.csv -- silently falls back to the dissemination
+            # (public-distribution) date whenever no true disbursement
+            # date is filed, which is routine for 24/48-hour notices on
+            # pre-scheduled ad buys. Dissemination dates can be genuinely
+            # in the future (an ad scheduled to run next week), so using
+            # them for "Most Recent Filing" produced dates ahead of
+            # today. Date Signed is the filer's per-line certification
+            # date -- always present, always <= today. Confirmed against
+            # committee C00881011's real filing 2002208: dissemination
+            # date up to 2026-08-04 on lines with independent_sign_date
+            # 2026-07-26. Deliberately NOT used for period-bucketing
+            # (below) or dedup -- those still use `date`, since an
+            # estimated event date is more meaningful than the filing
+            # date for "which quarter did this spending happen in."
+            sign_date = t.get("independent_sign_date") or t.get("sign_date") or ""
             g["cycle_total"] += amount
             g["count"] += 1
             for period, (start, end) in PERIOD_BOUNDS.items():
                 if date >= start and (end is None or date <= end):
                     g["period_totals"][period] += amount
-            if date > g["last_date"]:
-                g["last_date"] = date
+            if sign_date > g["last_date"]:
+                g["last_date"] = sign_date
                 g["last_file_number"] = t.get("file_number")
 
             # The committee's own self-reported running YTD total -- a
@@ -553,8 +572,8 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
             if ytd not in (None, "") and spender_id:
                 ytd = float(ytd)
                 sr = spender_self_report[spender_id]
-                if date > sr["date"] or (date == sr["date"] and (sr["ytd"] is None or ytd > sr["ytd"])):
-                    sr["date"] = date
+                if sign_date > sr["date"] or (sign_date == sr["date"] and (sr["ytd"] is None or ytd > sr["ytd"])):
+                    sr["date"] = sign_date
                     sr["ytd"] = ytd
 
         for (committee_id, spender_id, support_oppose), g in groups.items():
@@ -568,7 +587,7 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
                 "Outside Group": g["name"],
                 "SUM CandCategory": round(g["cycle_total"], 2),
                 "# Transactions": g["count"],
-                "Most Recent Expenditure": g["last_date"],
+                "Most Recent Filing": g["last_date"],
                 "FEC Committee Link": f"https://www.fec.gov/data/committee/{spender_id}/",
                 "FEC Most Recent Report Link": (
                     f"https://docquery.fec.gov/cgi-bin/forms/{spender_id}/{g['last_file_number']}/se"
