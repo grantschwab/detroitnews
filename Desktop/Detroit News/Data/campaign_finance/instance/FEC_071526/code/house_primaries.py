@@ -234,88 +234,67 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
     by_slug_direction = {}
     for r in outside:
         key = (r["slug"], r["direction"])
-        d = by_slug_direction.setdefault(key, {"all": 0.0, "since_july1": 0.0})
-        d["all"] += r["all"]
-        d["since_july1"] += r["since_july1"]
+        d = by_slug_direction.setdefault(key, 0.0)
+        by_slug_direction[key] = d + r["since_july1"]
 
     rows = []
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
         district = _district_label(contest_id)
         for slug in slugs:
             last = last_names.get(slug, slug.capitalize())
-            camp_all = campaign_all[slug]
-            camp_july1 = campaign_july1[slug]
-            if camp_all > 0 or camp_july1 > 0:
-                rows.append({"District": district, "Candidate": last, "Position": "Campaign",
-                             "All": camp_all, "Since July 1": camp_july1})
-            for direction, position in (("Support", "Support"), ("Oppose", "Oppose")):
-                d = by_slug_direction.get((slug, direction))
-                if d and (d["all"] > 0 or d["since_july1"] > 0):
-                    # Oppose spending shown as negative -- so a candidate's
-                    # net outside-money picture (support minus opposition)
-                    # reads directly off the All/Since July 1 columns.
-                    sign = -1 if direction == "Oppose" else 1
-                    rows.append({"District": district, "Candidate": last, "Position": position,
-                                 "All": sign * d["all"], "Since July 1": sign * d["since_july1"]})
+            support = by_slug_direction.get((slug, "Support"), 0.0)
+            # Oppose spending shown as negative -- so a candidate's net
+            # outside-money picture (support minus opposition) reads
+            # directly off the Support/Oppose columns together.
+            oppose = -by_slug_direction.get((slug, "Oppose"), 0.0)
+            campaign = campaign_july1[slug]
+            rows.append({"District": district, "Candidate": last,
+                         "Support": support, "Oppose": oppose, "Campaign": campaign})
     return rows
 
 
 def build_group_detail_rows(output_dir, credentials_path=None):
-    """One row per (Group, District, Candidate), with separate Support/
-    Oppose/Campaign columns instead of a single Direction+Total pair --
-    a candidate's own committee only ever populates Campaign, an outside
-    group only ever populates Support/Oppose (both, if it spent on the
-    same candidate both ways). Since-July-1 spend only, for now."""
     last_names, outside, campaign_all, campaign_july1 = _build_data(output_dir, credentials_path)
 
-    rows_by_key = {}
-
-    def row_for(group, district, candidate):
-        key = (group, district, candidate)
-        if key not in rows_by_key:
-            rows_by_key[key] = {"Group": group, "District": district, "Candidate": candidate,
-                                 "Support": 0.0, "Oppose": 0.0, "Campaign": 0.0}
-        return rows_by_key[key]
-
+    rows = []
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
         district = _district_label(contest_id)
         for slug in slugs:
-            spend = campaign_july1[slug]
+            spend = campaign_all[slug]
             if spend > 0:
                 last = last_names.get(slug, slug.capitalize())
-                row_for(f"{last} campaign", district, last)["Campaign"] += spend
-
+                rows.append({"Group": f"{last} campaign", "District": district,
+                             "Candidate": last, "Direction": "Campaign", "Total": spend})
     for r in outside:
-        if r["since_july1"] <= 0:
+        if r["all"] <= 0:
             continue
         district = _district_label(SLUG_TO_DISTRICT[r["slug"]])
         last = last_names.get(r["slug"], r["slug"].capitalize())
-        row = row_for(format_group_name(r["group"]), district, last)
-        row[r["direction"]] += r["since_july1"]
+        rows.append({"Group": format_group_name(r["group"]), "District": district,
+                     "Candidate": last, "Direction": r["direction"], "Total": r["all"]})
 
-    rows = list(rows_by_key.values())
-    rows.sort(key=lambda r: (r["District"], -(r["Support"] + r["Oppose"] + r["Campaign"])))
+    rows.sort(key=lambda r: (r["District"], -r["Total"]))
     return rows
 
 
-def update_district_summary(output_dir, credentials_path, worksheet_name="district_summary"):
+def update_district_summary(output_dir, credentials_path, worksheet_name="district_overview"):
     rows = build_district_summary_rows(output_dir, credentials_path)
     columns = ["District", "Time", "Outside Spending", "Campaigns", "Total"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 
-def update_candidate_positions(output_dir, credentials_path, worksheet_name="candidate_positions"):
+def update_candidate_positions(output_dir, credentials_path, worksheet_name="candidate_overview"):
     rows = build_candidate_position_rows(output_dir, credentials_path)
-    columns = ["District", "Candidate", "Position", "All", "Since July 1"]
+    columns = ["District", "Candidate", "Support", "Oppose", "Campaign"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 
-def update_group_detail(output_dir, credentials_path, worksheet_name="group_detail"):
+def update_group_detail(output_dir, credentials_path, worksheet_name="all_groups"):
     rows = build_group_detail_rows(output_dir, credentials_path)
-    columns = ["Group", "District", "Candidate", "Support", "Oppose", "Campaign"]
-    _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name, blank_zeros=True)
+    columns = ["Group", "District", "Candidate", "Direction", "Total"]
+    _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 

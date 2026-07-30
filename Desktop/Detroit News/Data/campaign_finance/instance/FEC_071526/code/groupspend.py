@@ -57,7 +57,7 @@ LOWERCASE_WORDS = {"a", "an", "the", "of", "for", "to", "in", "and", "or",
 # Stylized brand names that don't follow normal Title Case (e.g. internal
 # capitals). Checked case-insensitively against each raw word before the
 # generic formatting rules below.
-BRAND_OVERRIDES = {"MOVEON.ORG": "MoveOn.org"}
+BRAND_OVERRIDES = {"MOVEON.ORG": "MoveOn.org", "VOTEVETS": "VoteVets"}
 
 
 def format_group_name(name):
