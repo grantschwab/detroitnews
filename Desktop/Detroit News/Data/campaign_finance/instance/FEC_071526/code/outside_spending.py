@@ -430,21 +430,20 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     rows = []
     unmatched = defaultdict(lambda: {"total": 0.0, "count": 0})
     all_seen_spenders = set()
-    # Per-(spender, office) self-reported YTD tracking, keyed by the
-    # candidate committee the filing's own office_total_ytd line was
-    # actually about -- NOT per-spender-only. office_total_ytd is
-    # "Calendar YTD Per Election Office," scoped to one specific race; a
-    # spender active in multiple MI races (e.g. Rolling Sea Action Fund
-    # across Lawrence/MI-07 and McKinney/MI-13, or a group also active
-    # outside MI entirely, e.g. Moore/WI-04) files a separate running YTD
-    # per office. An earlier per-spender-only version (Grant 2026-07-21)
-    # took the single most-recently-filed office's YTD and stamped it on
-    # EVERY row for that spender, which was fine when a group only had one
-    # MI race, but produced nonsense once groups spanned several -- e.g.
-    # Rolling Sea Action Fund's Lawrence/MI-07 row showing $50,000 (a
-    # McKinney/MI-13 filing one day more recent) instead of Lawrence's own
-    # $1,024,952.18 office total. Fixed per Grant 2026-07-30.
-    spender_self_report = defaultdict(lambda: {"date": "", "ytd": None})
+    # Per-(spender, candidate committee) self-reported YTD tracking --
+    # office_total_ytd is scoped to one specific candidate's own committee
+    # (confirmed against Fighting for Michigan PAC, where Stevens' and
+    # El-Sayed's YTDs in the same race are clearly independent -- see the
+    # comment where this dict is populated below for the full story,
+    # including a same-day dead end keying on contest instead). A spender
+    # active in multiple MI races (e.g. Rolling Sea Action Fund across
+    # Lawrence/MI-07 and McKinney/MI-13, or a group also active outside MI
+    # entirely, e.g. Moore/WI-04) files a separate running YTD per office.
+    # An earlier per-spender-only version (original design, Grant
+    # 2026-07-21) stamped one office's YTD on every row for that spender
+    # regardless of which race the row was about -- fixed by this
+    # per-office keying (Grant 2026-07-30).
+    spender_self_report = defaultdict(lambda: {"ytd": None})
 
     # RSS/FastFEC fast path: accelerate filings from spenders we've seen
     # before (persisted across cycles/restarts). Never blocks the main
@@ -555,29 +554,47 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
 
             # The committee's own self-reported running YTD total -- a
             # per-line cumulative figure, not something to sum across rows.
-            # Tracked per (SPENDER, OFFICE): office_total_ytd is scoped to
-            # one specific candidate's office, so a row must show the most
-            # recent YTD filed for THAT office, not whatever office the
-            # spender happened to file for most recently overall (see
-            # comment on spender_self_report's declaration above).
-            # Within a tie on date, take the MAX YTD seen, not "whichever
-            # came last": a single filing routinely has multiple line items
-            # sharing the same expenditure_date, each with its own YTD
-            # snapshot as of that specific line (they build cumulatively
-            # down the schedule), so date alone doesn't identify the final
-            # figure. Confirmed on Unite to Win/Stevens filing 1998963 on
-            # 2026-07-21: two lines both dated 2026-07-16, YTD $2,087,047
-            # and $2,787,047 -- picking "last by date" on a tie is
-            # essentially arbitrary and grabbed the non-final one. Since
-            # this counter never decreases, the max is always correct.
+            # Tracked per (SPENDER, CONTEST), collapsing both candidates in
+            # a primary into one bucket. office_total_ytd's exact semantics
+            # turn out to vary by filer: Fighting for Michigan PAC
+            # (C00919373) reports genuinely different, independent YTDs for
+            # Stevens vs. El-Sayed in the same race, which looked like clear
+            # proof this field is tracked strictly per candidate committee.
+            # But summing per-candidate max YTDs on that assumption produced
+            # ~2x-inflated self-report totals across nearly every other
+            # 2-candidate-race group tested (UDP, Protect Progress, Michigan
+            # Sunrise PAC, PAF, Justice Democrats PAC, and partially even
+            # Fighting for Michigan itself) -- these groups' near-mirrored
+            # contrast spending means their two candidates' own committee
+            # totals end up close to identical, so summing them double-
+            # counts the shared spend. Per-candidate keying is closer to
+            # the FEC's documented definition, but empirically produces
+            # worse results on real MI data than collapsing to one number
+            # per contest. Contest-level keying isn't perfect either (it
+            # under-serves a genuinely-independent spender like Fighting
+            # for Michigan), but it's the better approximation on the data
+            # actually seen. Per Grant 2026-07-30: prioritize SELFREPORT
+            # staying close to SUM GroupAll over field-semantics purity.
+            # Take the MAX YTD ever seen for this key, full stop -- NOT
+            # "most recent by date" (even with a same-date max tie-break).
+            # This is a genuine cumulative running total and must never
+            # decrease, so any apparent decrease across records is a data
+            # anomaly (an amendment, a restatement, a differently-scoped
+            # report), never a real drop -- confirmed on Justice Democrats
+            # PAC/McKinney: file 2002503 (signed 2026-07-28) reports YTD
+            # $889,435.09; file 2002603, signed a full day LATER
+            # (2026-07-29), reports only $690,462.1 -- a later filing
+            # showing a lower cumulative total than an earlier one. Picking
+            # "most recent by date" grabbed that lower, apparently-
+            # superseded figure. Max-ever-seen is the only interpretation
+            # consistent with what this field is supposed to represent.
             # May be blank on some records (older filings, some report
             # types); that's fine, just leave it as-is if no better value.
             ytd = t.get("office_total_ytd")
             if ytd not in (None, "") and spender_id:
                 ytd = float(ytd)
-                sr = spender_self_report[(spender_id, cand["committee_id"])]
-                if sign_date > sr["date"] or (sign_date == sr["date"] and (sr["ytd"] is None or ytd > sr["ytd"])):
-                    sr["date"] = sign_date
+                sr = spender_self_report[(spender_id, (state, office, district))]
+                if sr["ytd"] is None or ytd > sr["ytd"]:
                     sr["ytd"] = ytd
 
         for (committee_id, spender_id, support_oppose), g in groups.items():
