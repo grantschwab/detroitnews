@@ -220,10 +220,10 @@ def build_district_summary_rows(output_dir, credentials_path=None):
         camp_all = sum(campaign_all[slug] for slug in slugs)
         camp_july1 = sum(campaign_july1[slug] for slug in slugs)
         district = _district_summary_label(contest_id, slugs, last_names)
-        rows.append({"District": district, "Time": "Whole cycle", "Total Outside Spending": outside_all,
-                     "Campaign": camp_all, "Total": outside_all + camp_all})
         rows.append({"District": district, "Time": "Since July 1", "Total Outside Spending": outside_july1,
-                     "Campaign": camp_july1, "Total": outside_july1 + camp_july1})
+                     "Campaigns": camp_july1, "Total": outside_july1 + camp_july1})
+        rows.append({"District": district, "Time": "Whole cycle", "Total Outside Spending": outside_all,
+                     "Campaigns": camp_all, "Total": outside_all + camp_all})
     return rows
 
 
@@ -286,7 +286,7 @@ def build_group_detail_rows(output_dir, credentials_path=None):
 
 def update_district_summary(output_dir, credentials_path, worksheet_name="district_summary"):
     rows = build_district_summary_rows(output_dir, credentials_path)
-    columns = ["District", "Time", "Total Outside Spending", "Campaign", "Total"]
+    columns = ["District", "Time", "Total Outside Spending", "Campaigns", "Total"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
