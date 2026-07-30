@@ -274,14 +274,14 @@ def build_group_detail_rows(output_dir, credentials_path=None):
             if spend > 0:
                 last = last_names.get(slug, slug.capitalize())
                 rows.append({"Group": f"{last} campaign", "District": district,
-                             "Candidate": last, "Direction": "Campaign", "Total": spend})
+                             "Candidate": last, "Position": "Campaign", "Total": spend})
     for r in outside:
         if r["all"] <= 0:
             continue
         district = _district_label(SLUG_TO_DISTRICT[r["slug"]])
         last = last_names.get(r["slug"], r["slug"].capitalize())
         rows.append({"Group": format_group_name(r["group"]), "District": district,
-                     "Candidate": last, "Direction": r["direction"], "Total": r["all"]})
+                     "Candidate": last, "Position": r["direction"], "Total": r["all"]})
 
     rows.sort(key=lambda r: -r["Total"])
     return rows
@@ -303,7 +303,7 @@ def update_candidate_positions(output_dir, credentials_path, worksheet_name="can
 
 def update_group_detail(output_dir, credentials_path, worksheet_name="all_groups"):
     rows = build_group_detail_rows(output_dir, credentials_path)
-    columns = ["Group", "District", "Candidate", "Direction", "Total"]
+    columns = ["Group", "District", "Candidate", "Position", "Total"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
