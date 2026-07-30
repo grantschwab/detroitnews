@@ -240,6 +240,7 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
     rows = []
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
         district = _district_label(contest_id)
+        district_rows = []
         for slug in slugs:
             last = last_names.get(slug, slug.capitalize())
             support = by_slug_direction.get((slug, "Support"), 0.0)
@@ -248,8 +249,17 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
             # directly off the Support/Oppose columns together.
             oppose = -by_slug_direction.get((slug, "Oppose"), 0.0)
             campaign = campaign_july1[slug]
-            rows.append({"District": district, "Candidate": last,
-                         "Support": support, "Oppose": oppose, "Campaign": campaign})
+            total = support + oppose + campaign
+            district_rows.append({"Candidate": f"{last} ({district})",
+                                  "Support": support, "Oppose": oppose, "Campaign": campaign,
+                                  "_abs_total": abs(total)})
+        # Districts stay in order (07, 10, 11, 13); within a district,
+        # descending by |Support + Oppose + Campaign| (Oppose already
+        # negative, so this is net dollar activity, not gross).
+        district_rows.sort(key=lambda r: -r["_abs_total"])
+        for r in district_rows:
+            del r["_abs_total"]
+        rows.extend(district_rows)
     return rows
 
 
@@ -286,7 +296,7 @@ def update_district_summary(output_dir, credentials_path, worksheet_name="distri
 
 def update_candidate_positions(output_dir, credentials_path, worksheet_name="candidate_overview"):
     rows = build_candidate_position_rows(output_dir, credentials_path)
-    columns = ["District", "Candidate", "Support", "Oppose", "Campaign"]
+    columns = ["Candidate", "Support", "Oppose", "Campaign"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
