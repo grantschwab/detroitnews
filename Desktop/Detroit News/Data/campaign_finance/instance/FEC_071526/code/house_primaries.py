@@ -35,9 +35,9 @@ from groupspend import format_group_name, _write_sheet
 # -- so don't auto-derive this list from candidates.csv.
 DISTRICT_CANDIDATES = {
     "mi07": ["brink", "maasdam", "lawrence"],
+    "mi13": ["mckinney", "thanedar"],
     "mi10": ["hines", "greimel", "chung"],
     "mi11": ["moss", "farooqi", "ufford"],
-    "mi13": ["mckinney", "thanedar"],
 }
 ALL_SLUGS = {slug for slugs in DISTRICT_CANDIDATES.values() for slug in slugs}
 SLUG_TO_DISTRICT = {slug: d for d, slugs in DISTRICT_CANDIDATES.items() for slug in slugs}
