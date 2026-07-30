@@ -430,15 +430,20 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     rows = []
     unmatched = defaultdict(lambda: {"total": 0.0, "count": 0})
     all_seen_spenders = set()
-    # Per-spender (not per-candidate/category) self-reported YTD tracking,
-    # spans every contest a spender touches (e.g. AFP Action covers both
-    # the Senate race and House races). Every row for a given group shows
-    # this same figure, from the group's single most recent filing overall
-    # -- even if that filing's own YTD line was about a different
-    # candidate/support-oppose category than the row itself. Per Grant
-    # 2026-07-21: a stale per-category number understates how current a
-    # group's reporting actually is when they just haven't filed anything
-    # new for THIS row's specific category lately.
+    # Per-(spender, office) self-reported YTD tracking, keyed by the
+    # candidate committee the filing's own office_total_ytd line was
+    # actually about -- NOT per-spender-only. office_total_ytd is
+    # "Calendar YTD Per Election Office," scoped to one specific race; a
+    # spender active in multiple MI races (e.g. Rolling Sea Action Fund
+    # across Lawrence/MI-07 and McKinney/MI-13, or a group also active
+    # outside MI entirely, e.g. Moore/WI-04) files a separate running YTD
+    # per office. An earlier per-spender-only version (Grant 2026-07-21)
+    # took the single most-recently-filed office's YTD and stamped it on
+    # EVERY row for that spender, which was fine when a group only had one
+    # MI race, but produced nonsense once groups spanned several -- e.g.
+    # Rolling Sea Action Fund's Lawrence/MI-07 row showing $50,000 (a
+    # McKinney/MI-13 filing one day more recent) instead of Lawrence's own
+    # $1,024,952.18 office total. Fixed per Grant 2026-07-30.
     spender_self_report = defaultdict(lambda: {"date": "", "ytd": None})
 
     # RSS/FastFEC fast path: accelerate filings from spenders we've seen
@@ -550,13 +555,11 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
 
             # The committee's own self-reported running YTD total -- a
             # per-line cumulative figure, not something to sum across rows.
-            # Tracked per SPENDER, not per candidate/category: every row for
-            # a given group shows the figure from that group's single most
-            # recent filing overall, even if that filing's own YTD line was
-            # about a different candidate/support-oppose category than the
-            # row -- a stale per-category number understates how current a
-            # group's reporting actually is when they just haven't filed
-            # anything new for THIS row's specific category lately.
+            # Tracked per (SPENDER, OFFICE): office_total_ytd is scoped to
+            # one specific candidate's office, so a row must show the most
+            # recent YTD filed for THAT office, not whatever office the
+            # spender happened to file for most recently overall (see
+            # comment on spender_self_report's declaration above).
             # Within a tie on date, take the MAX YTD seen, not "whichever
             # came last": a single filing routinely has multiple line items
             # sharing the same expenditure_date, each with its own YTD
@@ -572,7 +575,7 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
             ytd = t.get("office_total_ytd")
             if ytd not in (None, "") and spender_id:
                 ytd = float(ytd)
-                sr = spender_self_report[spender_id]
+                sr = spender_self_report[(spender_id, cand["committee_id"])]
                 if sign_date > sr["date"] or (sign_date == sr["date"] and (sr["ytd"] is None or ytd > sr["ytd"])):
                     sr["date"] = sign_date
                     sr["ytd"] = ytd
@@ -595,6 +598,7 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
                     if g["last_file_number"] else ""
                 ),
                 "_spender_id": spender_id,
+                "_committee_id": committee_id,
             }
             for period in PERIOD_BOUNDS:
                 row[period] = round(g["period_totals"].get(period, 0.0), 2)
@@ -614,18 +618,19 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     # SUM GroupAll: this outside group's total spend across every candidate
     # and race it's touched, not just the one this row is about -- lets a
     # reader see a group's full footprint without hunting across rows.
-    # SELFREPORT YTD Spend: the group's self-reported YTD from its single
-    # most recent filing overall, same reasoning -- see spender_self_report
-    # above. Both computed after every contest is processed, since a group
-    # (e.g. AFP Action) can spend across multiple House races plus the
-    # Senate race, each handled in a separate contest-loop iteration above.
+    # SELFREPORT YTD Spend: the group's self-reported YTD for THIS row's own
+    # office -- see spender_self_report above. Both computed after every
+    # contest is processed, since a group (e.g. AFP Action) can spend across
+    # multiple House races plus the Senate race, each handled in a separate
+    # contest-loop iteration above.
     spender_totals = defaultdict(float)
     for row in rows:
         spender_totals[row["_spender_id"]] += row["SUM CandCategory"]
     for row in rows:
         spender_id = row.pop("_spender_id")
+        committee_id = row.pop("_committee_id")
         row["SUM GroupAll"] = round(spender_totals[spender_id], 2)
-        ytd = spender_self_report.get(spender_id, {}).get("ytd")
+        ytd = spender_self_report.get((spender_id, committee_id), {}).get("ytd")
         row["SELFREPORT YTD Spend"] = round(ytd, 2) if ytd is not None else ""
 
     rows.sort(key=lambda r: r["SUM CandCategory"], reverse=True)
