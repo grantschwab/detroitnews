@@ -50,7 +50,7 @@ VALUE_COLUMNS = GROUP_COLUMNS
 # articles/prepositions lowercase except as the first word; everything else
 # gets normal Title Case.
 ACRONYMS = {"PAC", "PAF", "UDP", "AP", "DMFI", "JDCA", "LLC", "GOP", "DNC",
-            "RNC", "AIPAC", "NRA", "UAW", "SF"}
+            "RNC", "AIPAC", "NRA", "UAW", "SF", "SEIU", "COPE"}
 LOWERCASE_WORDS = {"a", "an", "the", "of", "for", "to", "in", "and", "or",
                     "on", "at", "by", "from", "with"}
 
