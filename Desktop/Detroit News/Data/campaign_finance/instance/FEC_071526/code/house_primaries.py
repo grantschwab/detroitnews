@@ -261,26 +261,40 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
 
 
 def build_group_detail_rows(output_dir, credentials_path=None):
+    """One row per (Group, District, Candidate), with separate Support/
+    Oppose/Campaign columns instead of a single Direction+Total pair --
+    a candidate's own committee only ever populates Campaign, an outside
+    group only ever populates Support/Oppose (both, if it spent on the
+    same candidate both ways). Since-July-1 spend only, for now."""
     last_names, outside, campaign_all, campaign_july1 = _build_data(output_dir, credentials_path)
 
-    rows = []
+    rows_by_key = {}
+
+    def row_for(group, district, candidate):
+        key = (group, district, candidate)
+        if key not in rows_by_key:
+            rows_by_key[key] = {"Group": group, "District": district, "Candidate": candidate,
+                                 "Support": 0.0, "Oppose": 0.0, "Campaign": 0.0}
+        return rows_by_key[key]
+
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
         district = _district_label(contest_id)
         for slug in slugs:
-            spend = campaign_all[slug]
+            spend = campaign_july1[slug]
             if spend > 0:
                 last = last_names.get(slug, slug.capitalize())
-                rows.append({"Group": f"{last} campaign", "District": district,
-                             "Candidate": last, "Direction": "Campaign", "Total": spend})
+                row_for(f"{last} campaign", district, last)["Campaign"] += spend
+
     for r in outside:
-        if r["all"] <= 0:
+        if r["since_july1"] <= 0:
             continue
         district = _district_label(SLUG_TO_DISTRICT[r["slug"]])
         last = last_names.get(r["slug"], r["slug"].capitalize())
-        rows.append({"Group": format_group_name(r["group"]), "District": district,
-                     "Candidate": last, "Direction": r["direction"], "Total": r["all"]})
+        row = row_for(format_group_name(r["group"]), district, last)
+        row[r["direction"]] += r["since_july1"]
 
-    rows.sort(key=lambda r: (r["District"], -r["Total"]))
+    rows = list(rows_by_key.values())
+    rows.sort(key=lambda r: (r["District"], -(r["Support"] + r["Oppose"] + r["Campaign"])))
     return rows
 
 
@@ -300,8 +314,8 @@ def update_candidate_positions(output_dir, credentials_path, worksheet_name="can
 
 def update_group_detail(output_dir, credentials_path, worksheet_name="group_detail"):
     rows = build_group_detail_rows(output_dir, credentials_path)
-    columns = ["Group", "District", "Candidate", "Direction", "Total"]
-    _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
+    columns = ["Group", "District", "Candidate", "Support", "Oppose", "Campaign"]
+    _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name, blank_zeros=True)
     return rows
 
 
