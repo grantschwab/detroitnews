@@ -598,7 +598,6 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
                     if g["last_file_number"] else ""
                 ),
                 "_spender_id": spender_id,
-                "_committee_id": committee_id,
             }
             for period in PERIOD_BOUNDS:
                 row[period] = round(g["period_totals"].get(period, 0.0), 2)
@@ -618,20 +617,40 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     # SUM GroupAll: this outside group's total spend across every candidate
     # and race it's touched, not just the one this row is about -- lets a
     # reader see a group's full footprint without hunting across rows.
-    # SELFREPORT YTD Spend: the group's self-reported YTD for THIS row's own
-    # office -- see spender_self_report above. Both computed after every
-    # contest is processed, since a group (e.g. AFP Action) can spend across
-    # multiple House races plus the Senate race, each handled in a separate
+    # SELFREPORT YTD Spend: the self-reported analog of SUM GroupAll -- the
+    # SUM of each office's own latest YTD (spender_self_report, keyed
+    # (spender, office) above) across every race that spender has touched,
+    # not just one office's figure. Per Grant 2026-07-30: SUM GroupAll and
+    # SELFREPORT YTD Spend should basically always match, and a group's
+    # SUM CandCategory rows should sum to SUM GroupAll -- true in the
+    # Senate race, where every spender only ever touches one office, so a
+    # single office's YTD and the cross-race total are the same number. A
+    # prior version of this fix (same day) tracked SELFREPORT per office
+    # only, which was correct per-office but could never equal a cross-race
+    # SUM GroupAll for a group active in multiple MI races (e.g. Rolling
+    # Sea Action Fund spending on both Lawrence/MI-07 and McKinney/MI-13).
+    # Summing every office's latest YTD fixes that while leaving the
+    # Senate-race behavior, already validated, unchanged (one office = one
+    # term in the sum). Both totals computed after every contest is
+    # processed, since a group (e.g. AFP Action) can spend across multiple
+    # House races plus the Senate race, each handled in a separate
     # contest-loop iteration above.
     spender_totals = defaultdict(float)
     for row in rows:
         spender_totals[row["_spender_id"]] += row["SUM CandCategory"]
+    spender_selfreport_totals = defaultdict(float)
+    spender_has_selfreport = set()
+    for (spender_id, committee_id), sr in spender_self_report.items():
+        if sr["ytd"] is not None:
+            spender_selfreport_totals[spender_id] += sr["ytd"]
+            spender_has_selfreport.add(spender_id)
     for row in rows:
         spender_id = row.pop("_spender_id")
-        committee_id = row.pop("_committee_id")
         row["SUM GroupAll"] = round(spender_totals[spender_id], 2)
-        ytd = spender_self_report.get((spender_id, committee_id), {}).get("ytd")
-        row["SELFREPORT YTD Spend"] = round(ytd, 2) if ytd is not None else ""
+        row["SELFREPORT YTD Spend"] = (
+            round(spender_selfreport_totals[spender_id], 2)
+            if spender_id in spender_has_selfreport else ""
+        )
 
     rows.sort(key=lambda r: r["SUM CandCategory"], reverse=True)
     return rows
