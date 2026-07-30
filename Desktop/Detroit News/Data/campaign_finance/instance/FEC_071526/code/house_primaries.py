@@ -199,17 +199,10 @@ def _build_data(output_dir, credentials_path):
 def build_district_summary_rows(output_dir, credentials_path=None):
     last_names, outside, campaign_all, campaign_july1 = _build_data(output_dir, credentials_path)
 
-    def signed(value, direction):
-        # Oppose spending counts negative here -- money attacking a Dem
-        # candidate in the primary nets against the district's outside
-        # total, rather than summing with support spending as if both
-        # helped the same side.
-        return -value if direction == "Oppose" else value
-
     rows = []
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
-        outside_all = sum(signed(r["all"], r["direction"]) for r in outside if r["slug"] in slugs)
-        outside_july1 = sum(signed(r["since_july1"], r["direction"]) for r in outside if r["slug"] in slugs)
+        outside_all = sum(r["all"] for r in outside if r["slug"] in slugs)
+        outside_july1 = sum(r["since_july1"] for r in outside if r["slug"] in slugs)
         camp_all = sum(campaign_all[slug] for slug in slugs)
         camp_july1 = sum(campaign_july1[slug] for slug in slugs)
         district = _district_label(contest_id)
@@ -244,8 +237,12 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
             for direction, position in (("Support", "Support"), ("Oppose", "Oppose")):
                 d = by_slug_direction.get((slug, direction))
                 if d and (d["all"] > 0 or d["since_july1"] > 0):
+                    # Oppose spending shown as negative -- so a candidate's
+                    # net outside-money picture (support minus opposition)
+                    # reads directly off the All/Since July 1 columns.
+                    sign = -1 if direction == "Oppose" else 1
                     rows.append({"District": district, "Candidate": last, "Position": position,
-                                 "All": d["all"], "Since July 1": d["since_july1"]})
+                                 "All": sign * d["all"], "Since July 1": sign * d["since_july1"]})
     return rows
 
 
