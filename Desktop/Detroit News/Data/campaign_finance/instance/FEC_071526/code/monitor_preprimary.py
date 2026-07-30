@@ -50,6 +50,7 @@ from monitor import (
 )
 import overallspend
 import groupspend
+import house_primaries
 
 REPORT_TYPE = "12P"
 
@@ -303,6 +304,12 @@ def main():
                         print("  groupspend_chart_ALL updated.")
                     except Exception as e:
                         print(f"  groupspend_chart_ALL update failed: {e}")
+
+                    try:
+                        house_primaries.update_all(args.output_dir, args.credentials)
+                        print("  House primary tabs updated.")
+                    except Exception as e:
+                        print(f"  House primary tabs update failed: {e}")
             for cand, filing, file_number, amendment_indicator in newly_processed:
                 try:
                     notify(candidate_name=cand["candidate_name"],
@@ -340,6 +347,12 @@ def main():
                 print("groupspend_chart_ALL updated.")
             except Exception as e:
                 print(f"groupspend_chart_ALL update failed: {e}")
+
+            try:
+                house_primaries.update_all(args.output_dir, args.credentials)
+                print("House primary tabs updated.")
+            except Exception as e:
+                print(f"House primary tabs update failed: {e}")
 
 
 if __name__ == "__main__":

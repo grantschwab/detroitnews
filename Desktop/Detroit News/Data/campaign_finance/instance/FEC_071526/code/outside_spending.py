@@ -61,6 +61,7 @@ from datetime import datetime
 
 import overallspend
 import groupspend
+import house_primaries
 
 try:
     import gspread
@@ -742,6 +743,12 @@ def main():
                 print("  groupspend_chart_ALL updated.")
             except Exception as e:
                 print(f"  groupspend_chart_ALL update failed: {e}")
+
+            try:
+                house_primaries.update_all(args.output_dir, args.credentials)
+                print("  House primary tabs updated.")
+            except Exception as e:
+                print(f"  House primary tabs update failed: {e}")
 
         if args.once:
             print("\nSingle pass complete.")

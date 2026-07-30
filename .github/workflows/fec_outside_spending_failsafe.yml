@@ -67,6 +67,7 @@ jobs:
             ${{ env.WORKDIR }}/.se_filing_cache
             ${{ env.WORKDIR }}/.known_spenders.json
             ${{ env.WORKDIR }}/.committee_names.json
+            ${{ env.WORKDIR }}/.house_candidate_names.json
           key: fec-pull-cache-${{ github.run_id }}
           restore-keys: |
             fec-pull-cache-
@@ -124,4 +125,5 @@ jobs:
             ${{ env.WORKDIR }}/.se_filing_cache
             ${{ env.WORKDIR }}/.known_spenders.json
             ${{ env.WORKDIR }}/.committee_names.json
+            ${{ env.WORKDIR }}/.house_candidate_names.json
           key: fec-pull-cache-${{ github.run_id }}
