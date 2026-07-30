@@ -199,21 +199,24 @@ def _build_data(output_dir, credentials_path):
 def build_district_summary_rows(output_dir, credentials_path=None):
     last_names, outside, campaign_all, campaign_july1 = _build_data(output_dir, credentials_path)
 
+    def signed(value, direction):
+        # Oppose spending counts negative here -- money attacking a Dem
+        # candidate in the primary nets against the district's outside
+        # total, rather than summing with support spending as if both
+        # helped the same side.
+        return -value if direction == "Oppose" else value
+
     rows = []
     for contest_id, slugs in DISTRICT_CANDIDATES.items():
-        outside_all = sum(r["all"] for r in outside if r["slug"] in slugs)
-        outside_july1 = sum(r["since_july1"] for r in outside if r["slug"] in slugs)
+        outside_all = sum(signed(r["all"], r["direction"]) for r in outside if r["slug"] in slugs)
+        outside_july1 = sum(signed(r["since_july1"], r["direction"]) for r in outside if r["slug"] in slugs)
         camp_all = sum(campaign_all[slug] for slug in slugs)
         camp_july1 = sum(campaign_july1[slug] for slug in slugs)
-        rows.append({
-            "District": _district_label(contest_id),
-            "Total Outside Spending (All Cycle)": outside_all,
-            "Total Outside Spending (Since Jul 1)": outside_july1,
-            "Campaign (All)": camp_all,
-            "Campaign (Jul 1)": camp_july1,
-            "Total (All Cycle)": outside_all + camp_all,
-            "Total (Since Jul 1)": outside_july1 + camp_july1,
-        })
+        district = _district_label(contest_id)
+        rows.append({"District": district, "Time": "All", "Total Outside Spending": outside_all,
+                     "Campaign": camp_all, "Total": outside_all + camp_all})
+        rows.append({"District": district, "Time": "Since July 1", "Total Outside Spending": outside_july1,
+                     "Campaign": camp_july1, "Total": outside_july1 + camp_july1})
     return rows
 
 
@@ -236,13 +239,13 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
             camp_all = campaign_all[slug]
             camp_july1 = campaign_july1[slug]
             if camp_all > 0 or camp_july1 > 0:
-                rows.append({"District": district, "Candidate": last, "Position": "campaign",
-                             "All": camp_all, "Since_July1": camp_july1})
-            for direction, position in (("Support", "support"), ("Oppose", "oppose")):
+                rows.append({"District": district, "Candidate": last, "Position": "Campaign",
+                             "All": camp_all, "Since July 1": camp_july1})
+            for direction, position in (("Support", "Support"), ("Oppose", "Oppose")):
                 d = by_slug_direction.get((slug, direction))
                 if d and (d["all"] > 0 or d["since_july1"] > 0):
                     rows.append({"District": district, "Candidate": last, "Position": position,
-                                 "All": d["all"], "Since_July1": d["since_july1"]})
+                                 "All": d["all"], "Since July 1": d["since_july1"]})
     return rows
 
 
@@ -272,15 +275,14 @@ def build_group_detail_rows(output_dir, credentials_path=None):
 
 def update_district_summary(output_dir, credentials_path, worksheet_name="district_summary"):
     rows = build_district_summary_rows(output_dir, credentials_path)
-    columns = ["District", "Total Outside Spending (All Cycle)", "Total Outside Spending (Since Jul 1)",
-               "Campaign (All)", "Campaign (Jul 1)", "Total (All Cycle)", "Total (Since Jul 1)"]
+    columns = ["District", "Time", "Total Outside Spending", "Campaign", "Total"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 
 def update_candidate_positions(output_dir, credentials_path, worksheet_name="candidate_positions"):
     rows = build_candidate_position_rows(output_dir, credentials_path)
-    columns = ["District", "Candidate", "Position", "All", "Since_July1"]
+    columns = ["District", "Candidate", "Position", "All", "Since July 1"]
     _write_sheet(rows, columns, HOUSE_SHEET_ID, credentials_path, worksheet_name)
     return rows
 

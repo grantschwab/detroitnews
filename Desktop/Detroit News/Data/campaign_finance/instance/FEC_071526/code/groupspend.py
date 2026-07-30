@@ -50,7 +50,7 @@ VALUE_COLUMNS = GROUP_COLUMNS
 # articles/prepositions lowercase except as the first word; everything else
 # gets normal Title Case.
 ACRONYMS = {"PAC", "PAF", "UDP", "AP", "DMFI", "JDCA", "LLC", "GOP", "DNC",
-            "RNC", "AIPAC", "NRA", "UAW"}
+            "RNC", "AIPAC", "NRA", "UAW", "SF"}
 LOWERCASE_WORDS = {"a", "an", "the", "of", "for", "to", "in", "and", "or",
                     "on", "at", "by", "from", "with"}
 
@@ -83,6 +83,10 @@ def format_group_name(name):
         elif "." in core:
             parts = core.split(".")
             formatted = parts[0].capitalize() + "." + ".".join(p.lower() for p in parts[1:])
+        elif "-" in core:
+            # e.g. "PRO-CHOICE" -> "Pro-Choice", not "Pro-choice"
+            # (plain .capitalize() only capitalizes the very first letter).
+            formatted = "-".join(p.capitalize() for p in core.split("-"))
         else:
             formatted = core.capitalize()
         out.append(prefix + formatted + suffix)
