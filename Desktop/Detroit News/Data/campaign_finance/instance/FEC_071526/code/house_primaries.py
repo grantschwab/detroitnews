@@ -196,6 +196,20 @@ def _build_data(output_dir, credentials_path):
     return last_names, outside, campaign_all, campaign_july1
 
 
+# Order candidates appear in the district label. Alphabetical by last
+# name everywhere except MI-13, where Thanedar (the incumbent) leads.
+DISTRICT_LABEL_ORDER = {
+    "mi13": ["thanedar", "mckinney"],
+}
+
+
+def _district_summary_label(contest_id, slugs, last_names):
+    order = DISTRICT_LABEL_ORDER.get(contest_id)
+    ordered_slugs = order if order else sorted(slugs, key=lambda s: last_names.get(s, s))
+    names = ", ".join(last_names.get(s, s.capitalize()) for s in ordered_slugs)
+    return f"{_district_label(contest_id)} ({names})"
+
+
 def build_district_summary_rows(output_dir, credentials_path=None):
     last_names, outside, campaign_all, campaign_july1 = _build_data(output_dir, credentials_path)
 
@@ -205,8 +219,8 @@ def build_district_summary_rows(output_dir, credentials_path=None):
         outside_july1 = sum(r["since_july1"] for r in outside if r["slug"] in slugs)
         camp_all = sum(campaign_all[slug] for slug in slugs)
         camp_july1 = sum(campaign_july1[slug] for slug in slugs)
-        district = _district_label(contest_id)
-        rows.append({"District": district, "Time": "All", "Total Outside Spending": outside_all,
+        district = _district_summary_label(contest_id, slugs, last_names)
+        rows.append({"District": district, "Time": "Whole cycle", "Total Outside Spending": outside_all,
                      "Campaign": camp_all, "Total": outside_all + camp_all})
         rows.append({"District": district, "Time": "Since July 1", "Total Outside Spending": outside_july1,
                      "Campaign": camp_july1, "Total": outside_july1 + camp_july1})
