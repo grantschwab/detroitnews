@@ -283,7 +283,7 @@ def build_group_detail_rows(output_dir, credentials_path=None):
         rows.append({"Group": format_group_name(r["group"]), "District": district,
                      "Candidate": last, "Direction": r["direction"], "Total": r["all"]})
 
-    rows.sort(key=lambda r: (r["District"], -r["Total"]))
+    rows.sort(key=lambda r: -r["Total"])
     return rows
 
 
