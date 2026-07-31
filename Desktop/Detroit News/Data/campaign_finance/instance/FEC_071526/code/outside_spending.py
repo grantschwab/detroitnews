@@ -430,19 +430,11 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     rows = []
     unmatched = defaultdict(lambda: {"total": 0.0, "count": 0})
     all_seen_spenders = set()
-    # Per-(spender, candidate committee) self-reported YTD tracking --
-    # office_total_ytd is scoped to one specific candidate's own committee
-    # (confirmed against Fighting for Michigan PAC, where Stevens' and
-    # El-Sayed's YTDs in the same race are clearly independent -- see the
-    # comment where this dict is populated below for the full story,
-    # including a same-day dead end keying on contest instead). A spender
-    # active in multiple MI races (e.g. Rolling Sea Action Fund across
-    # Lawrence/MI-07 and McKinney/MI-13, or a group also active outside MI
-    # entirely, e.g. Moore/WI-04) files a separate running YTD per office.
-    # An earlier per-spender-only version (original design, Grant
-    # 2026-07-21) stamped one office's YTD on every row for that spender
-    # regardless of which race the row was about -- fixed by this
-    # per-office keying (Grant 2026-07-30).
+    # Per-(spender, contest) self-reported YTD tracking -- see the comment
+    # where this dict is populated below for why contest-level keying (not
+    # per-spender, not per-candidate-committee) is the right granularity,
+    # and where this dict's own value is used below for why it's now a
+    # direct per-contest lookup, not summed across a spender's other races.
     spender_self_report = defaultdict(lambda: {"ytd": None})
 
     # RSS/FastFEC fast path: accelerate filings from spenders we've seen
@@ -631,43 +623,31 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
     save_json(known_spenders_path, sorted(known_spenders))
     save_json(committee_names_path, committee_names)
 
-    # SUM GroupAll: this outside group's total spend across every candidate
-    # and race it's touched, not just the one this row is about -- lets a
-    # reader see a group's full footprint without hunting across rows.
-    # SELFREPORT YTD Spend: the self-reported analog of SUM GroupAll -- the
-    # SUM of each office's own latest YTD (spender_self_report, keyed
-    # (spender, office) above) across every race that spender has touched,
-    # not just one office's figure. Per Grant 2026-07-30: SUM GroupAll and
-    # SELFREPORT YTD Spend should basically always match, and a group's
-    # SUM CandCategory rows should sum to SUM GroupAll -- true in the
-    # Senate race, where every spender only ever touches one office, so a
-    # single office's YTD and the cross-race total are the same number. A
-    # prior version of this fix (same day) tracked SELFREPORT per office
-    # only, which was correct per-office but could never equal a cross-race
-    # SUM GroupAll for a group active in multiple MI races (e.g. Rolling
-    # Sea Action Fund spending on both Lawrence/MI-07 and McKinney/MI-13).
-    # Summing every office's latest YTD fixes that while leaving the
-    # Senate-race behavior, already validated, unchanged (one office = one
-    # term in the sum). Both totals computed after every contest is
-    # processed, since a group (e.g. AFP Action) can spend across multiple
-    # House races plus the Senate race, each handled in a separate
-    # contest-loop iteration above.
-    spender_totals = defaultdict(float)
+    # SUM GroupAll: this outside group's total spend within the SAME
+    # CONTEST as the row, summed across every candidate/category in that
+    # one race -- NOT across every race the group has touched. SELFREPORT
+    # YTD Spend: that same contest's own self-reported YTD (spender_self_report,
+    # keyed (spender, contest) above) -- a direct lookup, no summing at all.
+    # Earlier today both columns were cross-race sums (spender-wide, adding
+    # up every contest a group touched), matching an invariant validated on
+    # Rolling Sea Action Fund (Lawrence/MI-07 + McKinney/MI-13). But Grant
+    # flagged Equality PAC's Chung (MI-10) and Moss (MI-11) rows both
+    # showing one combined $245,014.38 figure, even though the FEC tracks
+    # those as genuinely separate per-district totals -- confirmed via raw
+    # API data ($140,132.70 for Chung, $104,881.68 for Moss, same filing/
+    # date). Per Grant 2026-07-30: sums should be scoped to the row's own
+    # contest, never combined across the whole state -- reversing the
+    # cross-race design from earlier today for both columns.
+    spender_contest_totals = defaultdict(float)
     for row in rows:
-        spender_totals[row["_spender_id"]] += row["SUM CandCategory"]
-    spender_selfreport_totals = defaultdict(float)
-    spender_has_selfreport = set()
-    for (spender_id, committee_id), sr in spender_self_report.items():
-        if sr["ytd"] is not None:
-            spender_selfreport_totals[spender_id] += sr["ytd"]
-            spender_has_selfreport.add(spender_id)
+        key = (row["_spender_id"], contest_key(row["Contest ID"]))
+        spender_contest_totals[key] += row["SUM CandCategory"]
     for row in rows:
         spender_id = row.pop("_spender_id")
-        row["SUM GroupAll"] = round(spender_totals[spender_id], 2)
-        row["SELFREPORT YTD Spend"] = (
-            round(spender_selfreport_totals[spender_id], 2)
-            if spender_id in spender_has_selfreport else ""
-        )
+        key = (spender_id, contest_key(row["Contest ID"]))
+        row["SUM GroupAll"] = round(spender_contest_totals[key], 2)
+        sr = spender_self_report.get(key)
+        row["SELFREPORT YTD Spend"] = round(sr["ytd"], 2) if sr and sr["ytd"] is not None else ""
 
     rows.sort(key=lambda r: r["SUM CandCategory"], reverse=True)
     return rows
