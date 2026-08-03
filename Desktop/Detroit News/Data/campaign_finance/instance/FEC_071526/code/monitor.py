@@ -522,7 +522,7 @@ def upload_to_sheets(csv_path, sheet_id, credentials_path, worksheet_name=None):
                 "start": {"sheetId": ws.id, "rowIndex": 0, "columnIndex": 0},
             }
         },
-        # Filter with C Total_Receipts >= 100000. Per Grant 2026-08-03:
+        # Filter with C Total_Receipts >= 50000. Per Grant 2026-08-03:
         # replaces the prior default filter on Q Total_Receipts > 5000.
         # Shared by both monitor.py (cands_Q2) and monitor_preprimary.py
         # (cands_preprimary), which reuses this function wholesale.
@@ -540,7 +540,7 @@ def upload_to_sheets(csv_path, sheet_id, credentials_path, worksheet_name=None):
                         "filterCriteria": {
                             "condition": {
                                 "type": "NUMBER_GREATER_THAN_EQ",
-                                "values": [{"userEnteredValue": "100000"}]
+                                "values": [{"userEnteredValue": "50000"}]
                             }
                         }
                     }]
