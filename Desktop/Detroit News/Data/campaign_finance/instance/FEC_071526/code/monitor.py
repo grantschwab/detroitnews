@@ -406,7 +406,7 @@ def compile_csv(raw_dir, output_path, state):
 # ── Google Sheets ────────────────────────────────────────────────────────────
 
 # Columns to highlight in light yellow
-HIGHLIGHT_COLUMNS = {"Q Total_Receipts", "Q Cash on Hand", "Q Expenditures", "C Total_Receipts"}
+HIGHLIGHT_COLUMNS = {"Q Total_Receipts", "Q Cash on Hand", "Q Expenditures", "C Total_Receipts", "C Expenditures"}
 LIGHT_YELLOW = {"red": 1.0, "green": 0.98, "blue": 0.7}
 
 # Columns to format as dollars (whole number with commas)
