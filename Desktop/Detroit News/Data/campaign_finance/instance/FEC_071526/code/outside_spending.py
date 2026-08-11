@@ -61,7 +61,7 @@ from datetime import datetime
 
 import overallspend
 import groupspend
-import house_primaries
+import general_election
 
 try:
     import gspread
@@ -78,7 +78,7 @@ FASTFEC = "fastfec"
 OUTPUT_COLUMNS = [
     "Candidate Name", "First Name", "Contest ID", "Party",
     "Support/Oppose", "Outside Group",
-    "2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Jul 1 Spent",
+    "2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Aug 3 Spent",
     "SUM CandCategory", "SUM GroupAll", "SELFREPORT YTD Spend",
     "# Transactions", "Most Recent Filing",
     "FEC Committee Link", "FEC Most Recent Report Link",
@@ -90,7 +90,7 @@ PERIOD_BOUNDS = {
     "2025 Spent":        ("2025-01-01", "2025-12-31"),
     "Q1 2026 Spent":     ("2026-01-01", "2026-03-31"),
     "Q2 2026 Spent":     ("2026-04-01", "2026-06-30"),
-    "Since Jul 1 Spent": ("2026-07-01", None),
+    "Since Aug 3 Spent": ("2026-08-03", None),
 }
 
 
@@ -796,10 +796,10 @@ def main():
                 print(f"  groupspend_chart_ALL update failed: {e}")
 
             try:
-                house_primaries.update_all(args.output_dir, args.credentials)
-                print("  House primary tabs updated.")
+                general_election.update_all(args.output_dir, args.credentials)
+                print("  General election tabs updated.")
             except Exception as e:
-                print(f"  House primary tabs update failed: {e}")
+                print(f"  General election tabs update failed: {e}")
 
         if args.once:
             print("\nSingle pass complete.")

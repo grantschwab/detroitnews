@@ -105,10 +105,10 @@ jobs:
         run: |
           cd "$WORKDIR/code"
           python3 outside_spending.py \
-            --candidates candidates.csv \
+            --candidates candidates_general.csv \
             --output-dir '..' \
             --cycle 2026 \
-            --worksheet "outside_spend_TEST_Q2" \
+            --worksheet "outside_spend_gen" \
             --credentials "../service-account.json" \
             --once
 
