@@ -557,21 +557,29 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
             # in the future (an ad scheduled to run next week), so using
             # them for "Most Recent Filing" produced dates ahead of
             # today. Date Signed is the filer's per-line certification
-            # date -- always present, always <= today. Confirmed against
-            # committee C00881011's real filing 2002208: dissemination
-            # date up to 2026-08-04 on lines with independent_sign_date
-            # 2026-07-26. Deliberately NOT used for period-bucketing
-            # (below) or dedup -- those still use `date`, since an
-            # estimated event date is more meaningful than the filing
-            # date for "which quarter did this spending happen in."
+            # date -- almost always present, almost always <= today.
+            # Confirmed against committee C00881011's real filing 2002208:
+            # dissemination date up to 2026-08-04 on lines with
+            # independent_sign_date 2026-07-26. Deliberately NOT used for
+            # period-bucketing (below) or dedup -- those still use `date`,
+            # since an estimated event date is more meaningful than the
+            # filing date for "which quarter did this spending happen in."
+            # Per-transaction fallback to `date` when THIS record's own
+            # sign_date is blank (confirmed real, not just rare: AFSCME
+            # Working Families Fund/Rogers, sub_id 4080520261555556001,
+            # has independent_sign_date: null despite a valid file_number)
+            # -- otherwise that record silently contributes nothing to
+            # "Most Recent Filing"/the report link, even when a perfectly
+            # good file_number and expenditure_date both exist.
             sign_date = t.get("independent_sign_date") or t.get("sign_date") or ""
+            effective_date = sign_date or date
             g["cycle_total"] += amount
             g["count"] += 1
             for period, (start, end) in PERIOD_BOUNDS.items():
                 if date >= start and (end is None or date <= end):
                     g["period_totals"][period] += amount
-            if sign_date > g["last_date"]:
-                g["last_date"] = sign_date
+            if effective_date > g["last_date"]:
+                g["last_date"] = effective_date
                 g["last_file_number"] = t.get("file_number")
 
             # The committee's own self-reported running YTD total -- a
