@@ -78,7 +78,7 @@ FASTFEC = "fastfec"
 OUTPUT_COLUMNS = [
     "Candidate Name", "First Name", "Contest ID", "Party",
     "Support/Oppose", "Outside Group",
-    "2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Aug 3 Spent",
+    "2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Aug 5 Spent",
     "SUM CandCategory", "SUM GroupAll", "SELFREPORT YTD Spend",
     "# Transactions", "Most Recent Filing",
     "FEC Committee Link", "FEC Most Recent Report Link",
@@ -90,7 +90,7 @@ PERIOD_BOUNDS = {
     "2025 Spent":        ("2025-01-01", "2025-12-31"),
     "Q1 2026 Spent":     ("2026-01-01", "2026-03-31"),
     "Q2 2026 Spent":     ("2026-04-01", "2026-06-30"),
-    "Since Aug 3 Spent": ("2026-08-03", None),
+    "Since Aug 5 Spent": ("2026-08-05", None),
 }
 
 
@@ -679,7 +679,10 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
         sr = spender_self_report.get(key)
         row["SELFREPORT YTD Spend"] = round(sr["ytd"], 2) if sr and sr["ytd"] is not None else ""
 
-    rows.sort(key=lambda r: r["SUM CandCategory"], reverse=True)
+    # Per Grant 2026-08-11: sort by Since Aug 5 Spent, not all-cycle
+    # SUM CandCategory -- surfaces current general-election activity
+    # first rather than primary-era totals that are no longer accruing.
+    rows.sort(key=lambda r: r["Since Aug 5 Spent"], reverse=True)
     return rows
 
 

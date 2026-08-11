@@ -103,7 +103,7 @@ def _resolve_last_names(cache_path):
 
 def _outside_rows(output_dir):
     """List of dicts: slug, group, direction (Support/Oppose), all (SUM
-    CandCategory), since_aug3 (Since Aug 3 Spent) -- one per (candidate,
+    CandCategory), since_aug5 (Since Aug 5 Spent) -- one per (candidate,
     group, direction) already present in outside_spending_2026.csv."""
     path = os.path.join(output_dir, "output", "outside_spending_2026.csv")
     rows = []
@@ -119,7 +119,7 @@ def _outside_rows(output_dir):
                 "group": row.get("Outside Group", "").strip(),
                 "direction": row.get("Support/Oppose", "").strip(),
                 "all": _to_float(row.get("SUM CandCategory")),
-                "since_aug3": _to_float(row.get("Since Aug 3 Spent")),
+                "since_aug5": _to_float(row.get("Since Aug 5 Spent")),
             })
     return rows
 
@@ -160,11 +160,11 @@ def build_district_summary_rows(output_dir, credentials_path=None):
     rows = []
     for contest_id, slugs in RACE_CANDIDATES.items():
         outside_all = sum(r["all"] for r in outside if r["slug"] in slugs)
-        outside_aug3 = sum(r["since_aug3"] for r in outside if r["slug"] in slugs)
+        outside_aug5 = sum(r["since_aug5"] for r in outside if r["slug"] in slugs)
         camp_all = sum(campaign_all[slug] for slug in slugs)
         race = _race_summary_label(contest_id, slugs, last_names)
-        rows.append({"District": race, "Time": "Since Aug 3", "Outside Spending": outside_aug3,
-                     "Campaigns": "", "Total": outside_aug3})
+        rows.append({"District": race, "Time": "Since Aug 5", "Outside Spending": outside_aug5,
+                     "Campaigns": "", "Total": outside_aug5})
         rows.append({"District": race, "Time": "Whole cycle", "Outside Spending": outside_all,
                      "Campaigns": camp_all, "Total": outside_all + camp_all})
     return rows
@@ -176,7 +176,7 @@ def build_candidate_position_rows(output_dir, credentials_path=None):
     by_slug_direction = {}
     for r in outside:
         key = (r["slug"], r["direction"])
-        by_slug_direction[key] = by_slug_direction.get(key, 0.0) + r["since_aug3"]
+        by_slug_direction[key] = by_slug_direction.get(key, 0.0) + r["since_aug5"]
 
     rows = []
     for contest_id, slugs in RACE_CANDIDATES.items():
