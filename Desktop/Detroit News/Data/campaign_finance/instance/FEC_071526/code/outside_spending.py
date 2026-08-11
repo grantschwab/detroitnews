@@ -732,7 +732,31 @@ def upload_to_sheets(rows, sheet_id, credentials_path, worksheet_name):
         letter = col_letter(column_name)
         ws.format(f"{letter}1:{letter}{len(rows) + 1}", {"backgroundColor": color})
 
-    ws.set_basic_filter(f"A1:{chr(64 + len(OUTPUT_COLUMNS))}{len(rows) + 1}")
+    # Filter hides rows with zero spend Since Aug 5 by default -- per
+    # Grant 2026-08-11, surfaces groups with current general-election
+    # activity instead of every group with any all-cycle history.
+    spreadsheet.batch_update({"requests": [{
+        "setBasicFilter": {
+            "filter": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 0,
+                    "endRowIndex": len(rows) + 1,
+                    "startColumnIndex": 0,
+                    "endColumnIndex": len(OUTPUT_COLUMNS),
+                },
+                "filterSpecs": [{
+                    "columnIndex": OUTPUT_COLUMNS.index("Since Aug 5 Spent"),
+                    "filterCriteria": {
+                        "condition": {
+                            "type": "NUMBER_GREATER",
+                            "values": [{"userEnteredValue": "0"}]
+                        }
+                    }
+                }]
+            }
+        }
+    }]})
     ws.freeze(cols=1)
 
 
