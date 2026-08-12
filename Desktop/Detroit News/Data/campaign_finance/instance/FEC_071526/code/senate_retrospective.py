@@ -40,6 +40,14 @@ GRAPHICS_SHEET_ID = "1H2aq1gKbCV-9jcDs5ee2wIJeQdOAIeMQ_iLm1RbLUgY"
 
 DISPLAY_NAME = {"stevens": "Stevens", "elsayed": "El-Sayed", "mcmorrow": "McMorrow", "rogers": "Rogers"}
 
+# Color palette (given to Grant as plain hex, used in his Flourish chart,
+# not applied to the sheet itself): Anti-Stevens is GREEN (that spend
+# benefits El-Sayed) and Anti-El-Sayed is PURPLE (benefits Stevens) --
+# color tracks who benefits, not who's targeted. McMorrow (gold) and
+# Rogers (red) are self-contained. SEN_all_retro's consolidated Dems row
+# uses a fresh blue/light-blue pair, not Stevens' purple, since it
+# represents the whole Dem field, not one candidate.
+
 
 def _to_float(value):
     try:
@@ -203,6 +211,85 @@ def update_v2(credentials_path, worksheet_name="SEN_retro_v2"):
     return rows
 
 
+DEMS_RETRO_COLUMNS = [
+    "Category",
+    "Stevens campaign", "Pro-Stevens", "Anti-El-Sayed",
+    "El-Sayed campaign", "Pro-El-Sayed", "Anti-Stevens",
+    "McMorrow campaign", "Pro-McMorrow", "Anti-McMorrow",
+    "Total",
+]
+
+
+# Which slug's own Oppose total feeds the "Anti-X" column shown on a
+# given candidate's row -- Stevens' row shows Anti-El-Sayed (El-Sayed's
+# own oppose total, since that spend benefits Stevens); El-Sayed's row
+# shows Anti-Stevens (the reverse); McMorrow's row is self-contained (no
+# beneficiary pairing established for her). Same cross-mapping as
+# SEN_retro_v2/the palette -- see PALETTE comment above.
+ANTI_SOURCE_SLUG = {"stevens": "elsayed", "elsayed": "stevens", "mcmorrow": "mcmorrow"}
+
+
+def build_dems_retro_rows():
+    """Democrats-only, one row PER candidate (not combined) -- same
+    per-candidate columns and color-family ordering as SEN_retro_v2, just
+    three rows instead of one combined Dem row, and no Rogers at all."""
+    _, by_slug_direction, _, campaign, _ = build_data()
+
+    rows = []
+    for slug in DEM_SLUGS:
+        row = {"Category": DISPLAY_NAME[slug]}
+        for other_slug in DEM_SLUGS:
+            name = DISPLAY_NAME[other_slug]
+            row[f"{name} campaign"] = campaign[other_slug] if other_slug == slug else 0.0
+            row[f"Pro-{name}"] = by_slug_direction.get((other_slug, "Support"), 0.0) if other_slug == slug else 0.0
+        anti_source = ANTI_SOURCE_SLUG[slug]
+        anti_col = f"Anti-{DISPLAY_NAME[anti_source]}"
+        for col in DEMS_RETRO_COLUMNS:
+            if col.startswith("Anti-") and col != anti_col:
+                row[col] = 0.0
+        row[anti_col] = by_slug_direction.get((anti_source, "Oppose"), 0.0)
+        row["Total"] = sum(row[c] for c in DEMS_RETRO_COLUMNS if c not in ("Category", "Total"))
+        rows.append(row)
+    return rows
+
+
+def update_dems_retro(credentials_path, worksheet_name="SEN_Dems_retro"):
+    rows = build_dems_retro_rows()
+    _write_sheet(rows, DEMS_RETRO_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    return rows
+
+
+def build_all_retro_rows():
+    """Fully consolidated Dems vs. Rogers, two rows, two value columns.
+    Per Grant 2026-08-12: 'Outside money' sums BOTH directions onto
+    whichever side benefits -- Dems' outside money = every dollar
+    supporting any of the three Dems PLUS every dollar opposing Rogers;
+    Rogers' outside money = money supporting him PLUS money opposing any
+    Dem. Every outside dollar in the race lands on exactly one side."""
+    _, by_slug_direction, _, campaign, _ = build_data()
+
+    dem_campaign = sum(campaign[s] for s in DEM_SLUGS)
+    dem_outside = (sum(by_slug_direction.get((s, "Support"), 0.0) for s in DEM_SLUGS) +
+                   by_slug_direction.get(("rogers", "Oppose"), 0.0))
+    rogers_campaign = campaign["rogers"]
+    rogers_outside = (by_slug_direction.get(("rogers", "Support"), 0.0) +
+                       sum(by_slug_direction.get((s, "Oppose"), 0.0) for s in DEM_SLUGS))
+
+    return [
+        {"Category": "Democrats and supporters", "Campaign": dem_campaign, "Outside money": dem_outside,
+         "Total": dem_campaign + dem_outside},
+        {"Category": "Rogers and supporters", "Campaign": rogers_campaign, "Outside money": rogers_outside,
+         "Total": rogers_campaign + rogers_outside},
+    ]
+
+
+def update_all_retro(credentials_path, worksheet_name="SEN_all_retro"):
+    rows = build_all_retro_rows()
+    columns = ["Category", "Campaign", "Outside money", "Total"]
+    _write_sheet(rows, columns, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    return rows
+
+
 def build_group_rows():
     _, _, by_group, _, _ = build_data()
     rows = []
@@ -258,6 +345,16 @@ def main():
     for r in v2:
         print(f"  {r}")
 
+    dems = build_dems_retro_rows()
+    print("\n=== SEN_Dems_retro ===")
+    for r in dems:
+        print(f"  {r}")
+
+    all_retro = build_all_retro_rows()
+    print("\n=== SEN_all_retro ===")
+    for r in all_retro:
+        print(f"  {r}")
+
     if args.dry_run:
         print("\n--dry-run: not pushing to Sheets.")
         return
@@ -268,6 +365,10 @@ def main():
     print("SEN_retro_groups updated.")
     update_v2(args.credentials)
     print("SEN_retro_v2 updated.")
+    update_dems_retro(args.credentials)
+    print("SEN_Dems_retro updated.")
+    update_all_retro(args.credentials)
+    print("SEN_all_retro updated.")
 
 
 if __name__ == "__main__":
