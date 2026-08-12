@@ -143,45 +143,52 @@ def build_overall_rows():
 
 
 DEM_SLUGS = ("stevens", "elsayed", "mcmorrow")
+ALL_SLUGS_ORDERED = ("stevens", "elsayed", "mcmorrow", "rogers")
 
 
 def build_v2_rows():
     """Two-row version matching SEN_overall_chart's shape: one row for
     all three Dem primary candidates combined ("Democrats and
     supporters"), one for Rogers. Per Grant 2026-08-12: Campaign columns
-    use full campaign spend (not just the ad-related subset), and
-    Pro-candidate/Anti-candidate sum outside money supporting/opposing
-    ANY candidate on that side -- doesn't attempt to net out intra-party
-    dynamics (e.g. a group Pro-Stevens/Anti-El-Sayed still counts fully
-    toward both Pro-candidate and Anti-candidate on the Dem row), since
-    with three same-party primary rivals there's no single defensible way
-    to net that out the way the original 2-candidate zero-sum design did."""
+    use full campaign spend (not just the ad-related subset). Pro/Anti
+    are broken out PER CANDIDATE (Pro-Stevens, Anti-Stevens, Pro-El-Sayed,
+    Anti-El-Sayed, ...), not summed across the Dem side -- an earlier
+    version of this function summed them into one Pro-candidate/
+    Anti-candidate pair per row, which silently conflated intra-party
+    dynamics (a group Pro-Stevens/Anti-El-Sayed would count toward both
+    columns as if it were pro/anti the whole Dem field). Per-candidate
+    columns avoid that ambiguity entirely -- each candidate's own number
+    stays its own number, regardless of which row it's grouped under."""
     candidates, by_slug_direction, _, campaign, _ = build_data()
 
     row_dem = {"Category": "Democrats and supporters"}
     row_rogers = {"Category": "Rogers and supporters"}
-    for slug in DEM_SLUGS:
-        row_dem[f"{DISPLAY_NAME[slug]} campaign"] = campaign[slug]
-        row_rogers[f"{DISPLAY_NAME[slug]} campaign"] = 0.0
-    row_dem["Rogers campaign"] = 0.0
-    row_rogers["Rogers campaign"] = campaign["rogers"]
+    for slug in ALL_SLUGS_ORDERED:
+        row = row_dem if slug in DEM_SLUGS else row_rogers
+        other = row_rogers if slug in DEM_SLUGS else row_dem
+        name = DISPLAY_NAME[slug]
+        row[f"{name} campaign"] = campaign[slug]
+        row[f"Pro-{name}"] = by_slug_direction.get((slug, "Support"), 0.0)
+        row[f"Anti-{name}"] = by_slug_direction.get((slug, "Oppose"), 0.0)
+        other[f"{name} campaign"] = 0.0
+        other[f"Pro-{name}"] = 0.0
+        other[f"Anti-{name}"] = 0.0
 
-    row_dem["Pro-candidate"] = sum(by_slug_direction.get((s, "Support"), 0.0) for s in DEM_SLUGS)
-    row_dem["Anti-candidate"] = sum(by_slug_direction.get((s, "Oppose"), 0.0) for s in DEM_SLUGS)
-    row_rogers["Pro-candidate"] = by_slug_direction.get(("rogers", "Support"), 0.0)
-    row_rogers["Anti-candidate"] = by_slug_direction.get(("rogers", "Oppose"), 0.0)
-
-    campaign_cols = [f"{DISPLAY_NAME[s]} campaign" for s in DEM_SLUGS] + ["Rogers campaign"]
+    value_cols = [c for slug in ALL_SLUGS_ORDERED for c in
+                  (f"{DISPLAY_NAME[slug]} campaign", f"Pro-{DISPLAY_NAME[slug]}", f"Anti-{DISPLAY_NAME[slug]}")]
     for row in (row_dem, row_rogers):
-        row["Total"] = sum(row[c] for c in campaign_cols) + row["Pro-candidate"] + row["Anti-candidate"]
+        row["Total"] = sum(row[c] for c in value_cols)
 
     return [row_dem, row_rogers]
 
 
 def update_v2(credentials_path, worksheet_name="SEN_retro_v2"):
     rows = build_v2_rows()
-    columns = (["Category"] + [f"{DISPLAY_NAME[s]} campaign" for s in DEM_SLUGS] + ["Rogers campaign"] +
-               ["Pro-candidate", "Anti-candidate", "Total"])
+    columns = ["Category"]
+    for slug in ALL_SLUGS_ORDERED:
+        name = DISPLAY_NAME[slug]
+        columns += [f"{name} campaign", f"Pro-{name}", f"Anti-{name}"]
+    columns.append("Total")
     _write_sheet(rows, columns, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
