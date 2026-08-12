@@ -1,18 +1,21 @@
 """
 overallspend.py
 
-Builds the Stevens vs. El-Sayed spend-comparison table (campaign spend +
+Builds the El-Sayed vs. Rogers spend-comparison table (campaign spend +
 outside-group spend by support/oppose direction) and pushes it to the
 "overallspend_chart" Google Sheet tab, feeding a live-updating Flourish
 graphic.
 
-Reads only from the already-compiled output CSVs written by
-monitor_preprimary.py (campaign_finance_2026_preprimary.csv -- 12-day
-pre-primary filings, more current than the Q2 quarterly filing this
-replaced) and outside_spending.py (outside_spending_2026.csv) -- no new
-API calls. Called at the end of each of those two scripts' own
-sheet-upload step so this tab reflects whatever either pipeline most
-recently pulled.
+Retargeted 2026-08-11 (Grant) from the primary matchup (Stevens vs.
+El-Sayed) to the actual general-election matchup, now that the primary's
+over and outside_spending_2026.csv (which this reads) no longer contains
+any Stevens rows at all -- this tab was otherwise permanently showing $0
+for Stevens' side.
+
+Reads only from the already-compiled output CSVs written by monitor.py
+(campaign_finance_2026_Q2.csv) and outside_spending.py
+(outside_spending_2026.csv) -- no new API calls. Called at the end of
+outside_spending.py's own sheet-upload step.
 """
 
 import csv
@@ -25,8 +28,8 @@ try:
 except ImportError:
     GSPREAD_AVAILABLE = False
 
-OUTPUT_COLUMNS = ["Category", "Stevens campaign", "El-Sayed campaign", "Pro-Haley",
-                  "Anti-Abdul", "Pro-Abdul", "Anti-Haley", "Total"]
+OUTPUT_COLUMNS = ["Category", "El-Sayed campaign", "Rogers campaign", "Pro-Abdul",
+                  "Anti-Rogers", "Pro-Rogers", "Anti-Abdul", "Total"]
 
 # Graphics tabs live in a separate spreadsheet from the main tracking
 # sheet (candidate filings, raw outside-spending data) -- Flourish-facing
@@ -44,11 +47,11 @@ def _to_float(value):
 
 
 def _campaign_expenditures(output_dir):
-    """Cycle-to-date operating expenditures ('C Expenditures') for stevens/elsayed,
-    from their 12-day pre-primary (12P) filings -- more current than the Q2
-    quarterly filing this replaced."""
-    path = os.path.join(output_dir, "output", "campaign_finance_2026_preprimary.csv")
-    result = {"stevens": 0.0, "elsayed": 0.0}
+    """Cycle-to-date operating expenditures ('C Expenditures') for
+    elsayed/rogers, from the Q2 quarterly filing -- same source
+    general_election.py uses for its own campaign-spend figures."""
+    path = os.path.join(output_dir, "output", "campaign_finance_2026_Q2.csv")
+    result = {"elsayed": 0.0, "rogers": 0.0}
     if not os.path.exists(path):
         return result
     with open(path, newline="", encoding="utf-8") as f:
@@ -64,8 +67,8 @@ def _outside_totals(output_dir):
     grouped by (candidate, support/oppose)."""
     path = os.path.join(output_dir, "output", "outside_spending_2026.csv")
     totals = {
-        ("stevens", "Support"): 0.0, ("stevens", "Oppose"): 0.0,
         ("elsayed", "Support"): 0.0, ("elsayed", "Oppose"): 0.0,
+        ("rogers", "Support"): 0.0, ("rogers", "Oppose"): 0.0,
     }
     if not os.path.exists(path):
         return totals
@@ -83,15 +86,15 @@ def build_rows(output_dir):
     outside = _outside_totals(output_dir)
 
     values_by_category = {
-        "Stevens and supporters": {
-            "Stevens campaign": campaign["stevens"],
-            "Pro-Haley": outside[("stevens", "Support")],
-            "Anti-Abdul": outside[("elsayed", "Oppose")],
-        },
         "El-Sayed and supporters": {
             "El-Sayed campaign": campaign["elsayed"],
             "Pro-Abdul": outside[("elsayed", "Support")],
-            "Anti-Haley": outside[("stevens", "Oppose")],
+            "Anti-Rogers": outside[("rogers", "Oppose")],
+        },
+        "Rogers and supporters": {
+            "Rogers campaign": campaign["rogers"],
+            "Pro-Rogers": outside[("rogers", "Support")],
+            "Anti-Abdul": outside[("elsayed", "Oppose")],
         },
     }
 

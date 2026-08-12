@@ -1,20 +1,24 @@
 """
 groupspend.py
 
-Per-committee breakdown for the Stevens vs. El-Sayed race, feeding two
-Flourish graphics alongside overallspend_chart's summary view:
+Per-committee breakdown for the El-Sayed vs. Rogers general election,
+feeding two Flourish graphics alongside overallspend_chart's summary view:
 
 - SEN_groups_chart_100k+: outside groups only, $100k+ total spend only,
   for a bar chart.
 - SEN_groups_chart_ALL: every outside group (any spend amount) plus both
   campaigns, for a reference table.
 
+Retargeted 2026-08-11 (Grant) from the primary matchup (Stevens vs.
+El-Sayed) to the actual general-election matchup, now that the primary's
+over and outside_spending_2026.csv (which this reads) no longer contains
+any Stevens rows at all -- these tabs were otherwise permanently showing
+$0 for one side.
+
 Same pattern as overallspend.py: reads only the already-compiled output
-CSVs written by monitor_preprimary.py (campaign_finance_2026_preprimary.csv,
-ALL tab only -- 12-day pre-primary filings, more current than the Q2
-quarterly filing this replaced) and outside_spending.py
-(outside_spending_2026.csv) -- no new API calls. Called at the end of
-each of those two scripts' own sheet-upload step.
+CSVs written by monitor.py (campaign_finance_2026_Q2.csv) and
+outside_spending.py (outside_spending_2026.csv) -- no new API calls.
+Called at the end of outside_spending.py's own sheet-upload step.
 """
 
 import csv
@@ -27,7 +31,7 @@ try:
 except ImportError:
     GSPREAD_AVAILABLE = False
 
-OUTPUT_COLUMNS = ["Group", "Pro-Haley", "Anti-Abdul", "Pro-Abdul", "Anti-Haley"]
+OUTPUT_COLUMNS = ["Group", "Pro-Abdul", "Anti-Rogers", "Pro-Rogers", "Anti-Abdul"]
 ALL_OUTPUT_COLUMNS = ["Group", "Supports", "Pro-candidate", "Anti-opponent", "Total"]
 
 # Graphics tabs live in a separate spreadsheet from the main tracking
@@ -37,13 +41,13 @@ GRAPHICS_SHEET_ID = "1H2aq1gKbCV-9jcDs5ee2wIJeQdOAIeMQ_iLm1RbLUgY"
 
 # Maps (candidate slug, Support/Oppose) -> which of the four spend columns it feeds
 CATEGORY_COLUMN = {
-    ("stevens", "Support"): "Pro-Haley",
-    ("elsayed", "Oppose"):  "Anti-Abdul",
     ("elsayed", "Support"): "Pro-Abdul",
-    ("stevens", "Oppose"):  "Anti-Haley",
+    ("rogers", "Oppose"):   "Anti-Rogers",
+    ("rogers", "Support"):  "Pro-Rogers",
+    ("elsayed", "Oppose"):  "Anti-Abdul",
 }
 
-GROUP_COLUMNS = ["Pro-Haley", "Anti-Abdul", "Pro-Abdul", "Anti-Haley"]
+GROUP_COLUMNS = ["Pro-Abdul", "Anti-Rogers", "Pro-Rogers", "Anti-Abdul"]
 VALUE_COLUMNS = GROUP_COLUMNS
 
 # FEC committee names are filed in ALL CAPS. Known acronyms stay uppercase;
@@ -120,12 +124,12 @@ def _group_rows(output_dir):
 
 
 def _campaign_values(output_dir):
-    """Cycle-to-date campaign expenditures from the 12-day pre-primary
-    (12P) filings -- more current than the Q2 quarterly filing this
-    replaced."""
-    path = os.path.join(output_dir, "output", "campaign_finance_2026_preprimary.csv")
-    labels = {"stevens": "Stevens campaign", "elsayed": "El-Sayed campaign"}
-    result = {"Stevens campaign": 0.0, "El-Sayed campaign": 0.0}
+    """Cycle-to-date campaign expenditures from the Q2 quarterly filing --
+    same source general_election.py uses for its own campaign-spend
+    figures, so the two Senate-facing tab sets share one "as of" date."""
+    path = os.path.join(output_dir, "output", "campaign_finance_2026_Q2.csv")
+    labels = {"elsayed": "El-Sayed campaign", "rogers": "Rogers campaign"}
+    result = {"El-Sayed campaign": 0.0, "Rogers campaign": 0.0}
     if not os.path.exists(path):
         return result
     with open(path, newline="", encoding="utf-8") as f:
@@ -141,11 +145,11 @@ MIN_TOTAL = 100000
 
 def _lean(values):
     """Which candidate a group's spending predominantly helps.
-    Pro-Haley + Anti-Abdul both help Stevens; Pro-Abdul + Anti-Haley both
-    help El-Sayed."""
-    haley_side = values.get("Pro-Haley", 0.0) + values.get("Anti-Abdul", 0.0)
-    abdul_side = values.get("Pro-Abdul", 0.0) + values.get("Anti-Haley", 0.0)
-    return "Stevens" if haley_side >= abdul_side else "El-Sayed"
+    Pro-Abdul + Anti-Rogers both help El-Sayed; Pro-Rogers + Anti-Abdul
+    both help Rogers."""
+    abdul_side = values.get("Pro-Abdul", 0.0) + values.get("Anti-Rogers", 0.0)
+    rogers_side = values.get("Pro-Rogers", 0.0) + values.get("Anti-Abdul", 0.0)
+    return "El-Sayed" if abdul_side >= rogers_side else "Rogers"
 
 
 def build_rows(output_dir):
@@ -163,25 +167,25 @@ def build_rows(output_dir):
 
 def build_all_rows(output_dir):
     """Every outside group (any spend amount) plus both campaigns -- for
-    the unfiltered reference table, not the $100k+ chart. Pro-Haley/
-    Anti-Abdul collapse into "Pro-candidate"/"Anti-opponent" (and
-    Pro-Abdul/Anti-Haley the same way), with "Supports" saying which
+    the unfiltered reference table, not the $100k+ chart. Pro-Abdul/
+    Anti-Rogers collapse into "Pro-candidate"/"Anti-opponent" (and
+    Pro-Rogers/Anti-Abdul the same way), with "Supports" saying which
     candidate they refer to -- two fewer columns than showing all four
     directions separately."""
     group_rows = _group_rows(output_dir)
     campaign_values = _campaign_values(output_dir)
 
     rows = []
-    campaign_supports = {"Stevens campaign": "Stevens", "El-Sayed campaign": "El-Sayed"}
+    campaign_supports = {"El-Sayed campaign": "El-Sayed", "Rogers campaign": "Rogers"}
     for label, spend in campaign_values.items():
         rows.append({"Group": label, "Supports": campaign_supports[label],
                      "Pro-candidate": 0.0, "Anti-opponent": 0.0, "Total": spend})
     for group, values in group_rows.items():
         supports = _lean(values)
-        if supports == "Stevens":
-            pro, anti = values["Pro-Haley"], values["Anti-Abdul"]
+        if supports == "El-Sayed":
+            pro, anti = values["Pro-Abdul"], values["Anti-Rogers"]
         else:
-            pro, anti = values["Pro-Abdul"], values["Anti-Haley"]
+            pro, anti = values["Pro-Rogers"], values["Anti-Abdul"]
         # Total sums all four raw categories, not just the dominant-side
         # pair shown -- protects against undercounting if a group ever
         # spends on both candidates at once (not seen in practice, but
