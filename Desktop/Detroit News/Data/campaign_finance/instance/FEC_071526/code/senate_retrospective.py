@@ -184,11 +184,21 @@ def build_v2_rows():
 
 def update_v2(credentials_path, worksheet_name="SEN_retro_v2"):
     rows = build_v2_rows()
-    columns = ["Category"]
-    for slug in ALL_SLUGS_ORDERED:
-        name = DISPLAY_NAME[slug]
-        columns += [f"{name} campaign", f"Pro-{name}", f"Anti-{name}"]
-    columns.append("Total")
+    # Ordered by COLOR FAMILY, not by candidate -- per Grant's palette,
+    # Anti-Stevens is green (benefits El-Sayed) and Anti-El-Sayed is
+    # purple (benefits Stevens), so grouping by candidate would split
+    # same-colored columns apart. This keeps every same-color column
+    # adjacent: purple (Stevens' own two + El-Sayed's anti), green
+    # (El-Sayed's own two + Stevens' anti), gold (McMorrow, self-contained
+    # -- no cross-candidate color pairing specified), red (Rogers, same).
+    columns = [
+        "Category",
+        "Stevens campaign", "Pro-Stevens", "Anti-El-Sayed",       # purple
+        "El-Sayed campaign", "Pro-El-Sayed", "Anti-Stevens",      # green
+        "McMorrow campaign", "Pro-McMorrow", "Anti-McMorrow",     # gold
+        "Rogers campaign", "Pro-Rogers", "Anti-Rogers",           # red
+        "Total",
+    ]
     _write_sheet(rows, columns, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
