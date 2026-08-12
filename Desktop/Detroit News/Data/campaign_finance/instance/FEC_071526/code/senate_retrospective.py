@@ -142,6 +142,50 @@ def build_overall_rows():
     return rows
 
 
+DEM_SLUGS = ("stevens", "elsayed", "mcmorrow")
+
+
+def build_v2_rows():
+    """Two-row version matching SEN_overall_chart's shape: one row for
+    all three Dem primary candidates combined ("Democrats and
+    supporters"), one for Rogers. Per Grant 2026-08-12: Campaign columns
+    use full campaign spend (not just the ad-related subset), and
+    Pro-candidate/Anti-candidate sum outside money supporting/opposing
+    ANY candidate on that side -- doesn't attempt to net out intra-party
+    dynamics (e.g. a group Pro-Stevens/Anti-El-Sayed still counts fully
+    toward both Pro-candidate and Anti-candidate on the Dem row), since
+    with three same-party primary rivals there's no single defensible way
+    to net that out the way the original 2-candidate zero-sum design did."""
+    candidates, by_slug_direction, _, campaign, _ = build_data()
+
+    row_dem = {"Category": "Democrats and supporters"}
+    row_rogers = {"Category": "Rogers and supporters"}
+    for slug in DEM_SLUGS:
+        row_dem[f"{DISPLAY_NAME[slug]} campaign"] = campaign[slug]
+        row_rogers[f"{DISPLAY_NAME[slug]} campaign"] = 0.0
+    row_dem["Rogers campaign"] = 0.0
+    row_rogers["Rogers campaign"] = campaign["rogers"]
+
+    row_dem["Pro-candidate"] = sum(by_slug_direction.get((s, "Support"), 0.0) for s in DEM_SLUGS)
+    row_dem["Anti-candidate"] = sum(by_slug_direction.get((s, "Oppose"), 0.0) for s in DEM_SLUGS)
+    row_rogers["Pro-candidate"] = by_slug_direction.get(("rogers", "Support"), 0.0)
+    row_rogers["Anti-candidate"] = by_slug_direction.get(("rogers", "Oppose"), 0.0)
+
+    campaign_cols = [f"{DISPLAY_NAME[s]} campaign" for s in DEM_SLUGS] + ["Rogers campaign"]
+    for row in (row_dem, row_rogers):
+        row["Total"] = sum(row[c] for c in campaign_cols) + row["Pro-candidate"] + row["Anti-candidate"]
+
+    return [row_dem, row_rogers]
+
+
+def update_v2(credentials_path, worksheet_name="SEN_retro_v2"):
+    rows = build_v2_rows()
+    columns = (["Category"] + [f"{DISPLAY_NAME[s]} campaign" for s in DEM_SLUGS] + ["Rogers campaign"] +
+               ["Pro-candidate", "Anti-candidate", "Total"])
+    _write_sheet(rows, columns, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    return rows
+
+
 def build_group_rows():
     _, _, by_group, _, _ = build_data()
     rows = []
@@ -192,6 +236,11 @@ def main():
     for r in groups[:15]:
         print(f"  {r['Group'][:40]:<40} {r['Candidate']:<10} {r['Position']:<8} {r['Total']:>14,.0f}")
 
+    v2 = build_v2_rows()
+    print("\n=== SEN_retro_v2 ===")
+    for r in v2:
+        print(f"  {r}")
+
     if args.dry_run:
         print("\n--dry-run: not pushing to Sheets.")
         return
@@ -200,6 +249,8 @@ def main():
     print("\nSEN_retro_overall updated.")
     update_groups(args.credentials)
     print("SEN_retro_groups updated.")
+    update_v2(args.credentials)
+    print("SEN_retro_v2 updated.")
 
 
 if __name__ == "__main__":
