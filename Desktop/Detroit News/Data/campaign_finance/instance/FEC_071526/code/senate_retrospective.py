@@ -259,34 +259,51 @@ def update_dems_retro(credentials_path, worksheet_name="SEN_Dems_retro"):
     return rows
 
 
+ALL_RETRO_COLUMNS = ["Category", "Campaign (D)", "Outside money (D)", "Campaign (R)", "Outside money (R)", "Total"]
+
+
 def build_all_retro_rows():
-    """Fully consolidated Dems vs. Rogers, two rows, two value columns.
+    """Fully consolidated Dems vs. Rogers, two rows, separate D/R columns
+    (diagonal pattern -- each row only populates its own two columns,
+    matching SEN_Dems_retro/SEN_retro_v2's shape, so each column can get
+    its own fixed color in Flourish rather than needing per-cell coloring).
+
     Per Grant 2026-08-12: 'Outside money' sums BOTH directions onto
-    whichever side benefits -- Dems' outside money = every dollar
-    supporting any of the three Dems PLUS every dollar opposing Rogers;
-    Rogers' outside money = money supporting him PLUS money opposing any
-    Dem. Every outside dollar in the race lands on exactly one side."""
+    whichever side it's actually FOR/ABOUT -- Dems' outside money = every
+    dollar touching any of the three Dems, in EITHER direction (money
+    attacking one Dem during their own primary is still money spent on
+    the Dem primary, not money that helped Rogers) PLUS every dollar
+    opposing Rogers (that money benefits the Dem field). Rogers' outside
+    money = only money supporting him -- he had no primary opponent, so
+    there's no intra-GOP-attack analog to include.
+
+    An earlier version of this put ALL anti-Dem spending (including
+    Democrats attacking other Democrats in their own primary, e.g.
+    anti-Stevens/anti-El-Sayed) into Rogers' bucket, as if it were
+    Republican-aligned money -- it isn't. Grant caught the Dems total
+    coming out too low as a result (2026-08-12)."""
     _, by_slug_direction, _, campaign, _ = build_data()
 
     dem_campaign = sum(campaign[s] for s in DEM_SLUGS)
-    dem_outside = (sum(by_slug_direction.get((s, "Support"), 0.0) for s in DEM_SLUGS) +
-                   by_slug_direction.get(("rogers", "Oppose"), 0.0))
+    dem_related_both_directions = sum(
+        by_slug_direction.get((s, d), 0.0) for s in DEM_SLUGS for d in ("Support", "Oppose"))
+    dem_outside = dem_related_both_directions + by_slug_direction.get(("rogers", "Oppose"), 0.0)
+
     rogers_campaign = campaign["rogers"]
-    rogers_outside = (by_slug_direction.get(("rogers", "Support"), 0.0) +
-                       sum(by_slug_direction.get((s, "Oppose"), 0.0) for s in DEM_SLUGS))
+    rogers_outside = by_slug_direction.get(("rogers", "Support"), 0.0)
 
     return [
-        {"Category": "Democrats and supporters", "Campaign": dem_campaign, "Outside money": dem_outside,
-         "Total": dem_campaign + dem_outside},
-        {"Category": "Rogers and supporters", "Campaign": rogers_campaign, "Outside money": rogers_outside,
+        {"Category": "Democrats and supporters", "Campaign (D)": dem_campaign, "Outside money (D)": dem_outside,
+         "Campaign (R)": 0.0, "Outside money (R)": 0.0, "Total": dem_campaign + dem_outside},
+        {"Category": "Rogers and supporters", "Campaign (D)": 0.0, "Outside money (D)": 0.0,
+         "Campaign (R)": rogers_campaign, "Outside money (R)": rogers_outside,
          "Total": rogers_campaign + rogers_outside},
     ]
 
 
 def update_all_retro(credentials_path, worksheet_name="SEN_all_retro"):
     rows = build_all_retro_rows()
-    columns = ["Category", "Campaign", "Outside money", "Total"]
-    _write_sheet(rows, columns, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    _write_sheet(rows, ALL_RETRO_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 
