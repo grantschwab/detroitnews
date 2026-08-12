@@ -29,6 +29,9 @@ import argparse
 import csv
 import os
 
+import gspread
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+
 import outside_spending as osp
 from groupspend import format_group_name, _write_sheet
 
@@ -259,7 +262,14 @@ def update_dems_retro(credentials_path, worksheet_name="SEN_Dems_retro"):
     return rows
 
 
-ALL_RETRO_COLUMNS = ["Category", "Campaign (D)", "Outside money (D)", "Campaign (R)", "Outside money (R)", "Total"]
+# Internal dict keys stay unique (Campaign (D) vs Campaign (R), etc.);
+# the SHEET header row uses Grant's requested labels, which repeat
+# "Outside groups" for both sides -- a dict can't hold two values under
+# one duplicate key, so update_all_retro() writes headers/values
+# positionally instead of reusing groupspend._write_sheet()'s
+# header-name-as-dict-key approach.
+ALL_RETRO_KEYS = ["Category", "Campaign (D)", "Outside money (D)", "Campaign (R)", "Outside money (R)", "Total"]
+ALL_RETRO_HEADERS = ["Category", "Candidate committees", "Outside groups", "Rogers campaign", "Outside groups", "Total"]
 
 
 def build_all_retro_rows():
@@ -302,8 +312,28 @@ def build_all_retro_rows():
 
 
 def update_all_retro(credentials_path, worksheet_name="SEN_all_retro"):
+    """Writes positionally (headers/values by ALL_RETRO_KEYS order) since
+    ALL_RETRO_HEADERS repeats "Outside groups" for both sides -- can't go
+    through groupspend._write_sheet(), which keys each column by its own
+    header text and requires headers to be unique."""
     rows = build_all_retro_rows()
-    _write_sheet(rows, ALL_RETRO_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_service_account_file(credentials_path, scopes=scopes)
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open_by_key(GRAPHICS_SHEET_ID)
+    try:
+        ws = spreadsheet.worksheet(worksheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=worksheet_name, rows=max(len(rows) + 10, 20), cols=10)
+
+    data = [ALL_RETRO_HEADERS] + [[r[k] for k in ALL_RETRO_KEYS] for r in rows]
+    ws.clear()
+    ws.update(values=data, range_name="A1")
+    last_col = chr(64 + len(ALL_RETRO_HEADERS))
+    ws.format(f"A1:{last_col}1", {"textFormat": {"bold": True}})
+    ws.format(f"B2:{last_col}{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
+    ws.freeze(cols=1)
     return rows
 
 
