@@ -60,6 +60,7 @@ from collections import defaultdict
 from datetime import datetime
 
 import overallspend
+import postprim_chart
 import groupspend
 import general_election
 
@@ -817,6 +818,12 @@ def main():
                 print("  overallspend_chart updated.")
             except Exception as e:
                 print(f"  overallspend_chart update failed: {e}")
+
+            try:
+                postprim_chart.update_postprim_chart(args.output_dir, args.credentials)
+                print("  postprim_chart updated.")
+            except Exception as e:
+                print(f"  postprim_chart update failed: {e}")
 
             try:
                 groupspend.update_groupspend_chart(args.output_dir, args.sheet_id, args.credentials)
