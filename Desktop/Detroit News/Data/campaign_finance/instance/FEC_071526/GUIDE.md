@@ -5,7 +5,7 @@
 Four independent background scripts, pushing to their own tab in the same Google Sheet:
 
 1. **`monitor.py` (Q2)** — Michigan candidate committee filings (Q2 2026 mid-year reports) → `cands_Q2`. Auto-detects new filings same-day via the FEC's own Electronic Filing RSS feed (no manual paste needed — see below), downloads and parses each new/amended filing with FastFEC, compiles a summary CSV, pushes to Sheets, sends a macOS notification. Polls every 30 min.
-2. **`outside_spending.py`** — Independent expenditures (FEC Schedule E) by outside groups (Super PACs, party committees, anyone) supporting or opposing the same candidates → `outside_spend_TEST_Q2`. Queried by *contest* (state/office/district), not by a specific candidate — some filers only fill in the free-text candidate name and leave the structured candidate ID blank, which a candidate_id-only query would silently miss. Also auto-accelerates known spenders via the RSS feed + FastFEC (see below) when api.open.fec.gov is lagging.
+2. **`outside_spending.py`** — Independent expenditures (FEC Schedule E) by outside groups (Super PACs, party committees, anyone) supporting or opposing the same candidates → `outside_spend_gen` (general election, `candidates_general.csv`; the primary-era snapshot is frozen at `outside_spend_primary`). Queried by *contest* (state/office/district), not by a specific candidate — some filers only fill in the free-text candidate name and leave the structured candidate ID blank, which a candidate_id-only query would silently miss. Also auto-accelerates known spenders via the RSS feed + FastFEC (see below) when api.open.fec.gov is lagging.
 3. **`monitor_preprimary.py`** — Michigan candidates' 12-day pre-primary (`report_type=12P`) reports, ahead of the Aug 4, 2026 primary → `cands_preprimary`. Only quarterly filers must file a 12P (11 CFR 104.5 exempts monthly filers). Uses its own `raw_preprimary/` dir and `.monitor_preprimary_state.json` state file so a 12P file_number never collides with a candidate's Q2 file_number in the shared `raw/` tree.
 4. **`monitor.py` (Q1 amendment recheck)** — same script as #1, but pointed at `--quarter Q1` with `--worksheet cands_Q1`, so late amendments to already-passed quarters keep showing up instead of the tab going stale. See "Past-Quarter Amendment Rechecking" below for why this needed its own instance.
 
@@ -92,7 +92,7 @@ export FEC_API_KEY="qTG3dgVaQs5TjGq9Z2yQEH71weeD4pP3W1c0Jpnx"
 Both scripts run through `supervise.sh`, a small restart-loop wrapper: if either script crashes (uncaught exception), it sends a macOS notification and restarts it automatically. If it crashes repeatedly — 5 times within 30 minutes — the supervisor gives up, sends a final "needs help" notification, and stops retrying rather than looping forever against something genuinely broken. Check the log to see the actual error if that happens.
 
 ```bash
-rm -f ../monitor_q2.stop ../outside_spending_q2.stop
+rm -f ../monitor_q2.stop ../outside_spending_gen.stop
 
 nohup caffeinate -i ./supervise.sh monitor ../monitor_q2.stop 5 1800 \
   python3 -u monitor.py \
@@ -100,22 +100,23 @@ nohup caffeinate -i ./supervise.sh monitor ../monitor_q2.stop 5 1800 \
   --cycle 2026 --quarter Q2 --worksheet "cands_Q2" \
   > ../monitor_q2.log 2>&1 &
 
-nohup caffeinate -i ./supervise.sh outside_spending ../outside_spending_q2.stop 5 1800 \
+nohup caffeinate -i ./supervise.sh outside_spending ../outside_spending_gen.stop 5 1800 \
   python3 -u outside_spending.py \
-  --candidates candidates.csv --output-dir '..' \
-  --cycle 2026 --worksheet "outside_spend_TEST_Q2" \
-  > ../outside_spending_q2.log 2>&1 &
+  --candidates candidates_general.csv --output-dir '..' \
+  --cycle 2026 --worksheet "outside_spend_gen" \
+  > ../outside_spending_gen.log 2>&1 &
 ```
 
 `-u` (unbuffered) matters — without it, Python buffers stdout when redirected to a file and `tail -f` shows nothing until a full poll cycle completes.
 
-- Check on either process: `tail -f ../monitor_q2.log` or `tail -f ../outside_spending_q2.log`
+- Check on either process: `tail -f ../monitor_q2.log` or `tail -f ../outside_spending_gen.log`
 - Confirm both are running (4 processes each — `caffeinate`, `bash supervise.sh`, and the `python3` child): `ps aux | grep -E "supervise.sh|monitor.py|outside_spending.py"`
 - **Stop both at end of day** (do NOT just `pkill` the python processes alone — the supervisor will just restart them; touch the stop file first so the supervisor exits cleanly instead of respawning):
   ```bash
-  touch ../monitor_q2.stop ../outside_spending_q2.stop
+  touch ../monitor_q2.stop ../outside_spending_gen.stop
   pkill -f "supervise.sh|monitor.py|outside_spending.py"
   ```
+- **Auto-start on reboot**: see `START_STOP.md` → "Auto-start on machine reboot (launchd)" for the launchd setup (built but pending a one-time Full Disk Access grant to `/bin/bash`, blocked by macOS TCC restricting Desktop-folder access for launchd-spawned processes).
 
 ### Manual single-pass trigger (e.g. to test a change)
 ```bash
@@ -202,7 +203,9 @@ Each cycle, for every known spender: query the RSS feed for Schedule-E-bearing f
 **URL:** https://docs.google.com/spreadsheets/d/10ILJsuZIXvsreJdHPpYZK_g4T4nEGXhMGVw8VtZXkgc/edit
 
 - **"cands_Q2" tab** — committee filings, written by `monitor.py`. Filter dropdowns on all columns, `Q Total_Receipts` filtered to > $5,000 by default, light yellow highlight on key dollar columns, `Q Burn Rate` as a percentage. Separate tab from Q1's data ("cands_Q1"), created automatically on first run.
-- **"outside_spend_TEST_Q2" tab** — independent expenditures, written by `outside_spending.py`. One row per (candidate, outside group, support/oppose), sorted by cycle-to-date spend descending, with filter dropdowns and currency formatting on the dollar columns. Fully recomputed each poll cycle (not incremental) since Schedule E amendments and notice/periodic overlap need re-resolving every time — see the dedup logic in `dedupe_notice_vs_periodic()`.
+- **"outside_spend_gen" tab** — independent expenditures for the 10-nominee general-election field, written by `outside_spending.py`. One row per (candidate, outside group, support/oppose), sorted by cycle-to-date spend descending, with filter dropdowns and currency formatting on the dollar columns. Fully recomputed each poll cycle (not incremental) since Schedule E amendments and notice/periodic overlap need re-resolving every time — see the dedup logic in `dedupe_notice_vs_periodic()`. (Primary-era data, frozen as of Aug 4, lives at "outside_spend_primary" and no longer updates.)
+
+**Amendment handling caveat (2026-09-09):** an earlier per-filing "has this been amended away?" check (`filing_is_superseded()`) was removed after it was found to rely on a non-functional API filter (`file_number` on `schedules/schedule_e/` doesn't actually scope results — see `schedule_e_outside_spending.md`) and was non-deterministically discarding valid new filings. There's currently no replacement check for the narrow case of an RSS/FastFEC-cached filing being amended *after* it was cached — a real but much smaller risk than the data loss the old check caused. If numbers look inflated for a specific spender, check whether a recent filing of theirs was amended.
 
 If you rename a tab in the Sheets UI while a background loop is running, the loop won't know — on its next poll it'll recreate a fresh blank tab under the old name it still has in memory. Kill and relaunch with `--worksheet` pointed at the new name if you rename a tab mid-day.
 
