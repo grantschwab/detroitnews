@@ -219,44 +219,36 @@ def fetch_rss_filings(committee_ids, chunk_size=150):
     return results
 
 
-def filing_is_superseded(file_number, committee_id):
-    """
-    True if this filing has since been amended away -- i.e. the API now
-    reports any of its own records as most_recent: false. FastFEC parses
-    a filing's raw text directly, which has no concept of amendments/
-    most_recent at all, so a filing cached via parse_se_filing() before it
-    was amended would otherwise keep contributing stale, superseded
-    transactions forever, double-counted alongside the amendment's own
-    (separately RSS-discovered and cached) corrected filing. Confirmed on
-    Justice Democrats PAC: filing 2001893 was amended by 2002603, and
-    2001893's own records flip to most_recent: false once queried directly.
-    Non-fatal on error -- if the check itself fails, assume NOT superseded
-    (keep using the cached content) rather than silently dropping data.
-    """
-    try:
-        data = query_fec("schedules/schedule_e/", {
-            "file_number": file_number, "committee_id": committee_id, "per_page": 100,
-        })
-        return any(r.get("most_recent") is False for r in data.get("results", []))
-    except Exception:
-        return False
-
-
-def parse_se_filing(file_number, form_type, cache_dir, committee_id=None):
+def parse_se_filing(file_number, form_type, cache_dir):
     """
     Downloads and parses one filing's Schedule E rows via FastFEC, caching
     the result to disk (keyed by file_number) so repeat polls don't
     re-download/re-parse. Returns a list of transaction dicts shaped like
     the ones aggregate() already consumes from the API, or [] on any
     failure -- never raises, since a bad filing shouldn't kill the cycle.
-    Also returns [] if the filing has since been amended away (see
-    filing_is_superseded()) -- checked on every call, cache hit or not,
-    since a filing can become superseded well after it was first cached.
+
+    No amendment-supersession check here anymore. A prior version (Grant,
+    2026-07-30) added filing_is_superseded(), which queried
+    schedules/schedule_e/ with a file_number param to check whether a
+    cached filing had since been amended away. Removed 2026-09-09:
+    confirmed file_number is NOT a real filter on this endpoint -- a
+    nonexistent file_number returned the committee's full, unfiltered
+    history (2,567 records for America PAC) just the same as a real one.
+    Without real filtering, the check was actually asking "has this
+    committee EVER had ANY amended filing" (true for nearly every active
+    committee) against an unstably-ordered ~100-record slice of its whole
+    history, so the same file_number+committee_id call flipped between
+    True and False across repeated calls with no state change in between
+    -- confirmed directly on America PAC filing 2011127. This was
+    silently discarding real, valid, never-amended filings on essentially
+    a coin flip, for any committee with amendment history -- reintroducing
+    a smaller, narrower risk (a filing amended AFTER being RSS-cached,
+    the original Justice Democrats PAC scenario this was built for, could
+    again double-count) is a better trade than routinely losing brand-new
+    spending data outright.
     """
     cache_path = os.path.join(cache_dir, f"{file_number}.json")
     if os.path.exists(cache_path):
-        if committee_id and filing_is_superseded(file_number, committee_id):
-            return []
         with open(cache_path) as f:
             return json.load(f)
 
@@ -300,8 +292,6 @@ def parse_se_filing(file_number, form_type, cache_dir, committee_id=None):
 
     with open(cache_path, "w") as f:
         json.dump(transactions, f)
-    if committee_id and filing_is_superseded(file_number, committee_id):
-        return []
     return transactions
 
 
@@ -485,7 +475,7 @@ def aggregate(candidates, cycle, min_date, output_dir, use_rss=True):
         rss_filings = fetch_rss_filings(known_spenders)
         print(f"{len(rss_filings)} recent filing(s)")
         for committee_id, file_number, form_type in rss_filings:
-            txns = parse_se_filing(file_number, form_type, se_cache_dir, committee_id)
+            txns = parse_se_filing(file_number, form_type, se_cache_dir)
             for t in txns:
                 cid = t["committee"]["committee_id"]
                 t["committee"]["name"] = get_committee_name(cid, committee_names)
