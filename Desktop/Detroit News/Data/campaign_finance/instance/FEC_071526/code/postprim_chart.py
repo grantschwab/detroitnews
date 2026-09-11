@@ -181,12 +181,12 @@ def build_rows(output_dir):
     outside = _outside_since_cutoff(output_dir)
 
     values_by_category = {
-        "El-Sayed and supporters": {
+        "El-Sayed supporters": {
             "El-Sayed campaign": campaign["elsayed"],
             "Pro-Abdul": outside[("elsayed", "Support")],
             "Anti-Rogers": outside[("rogers", "Oppose")],
         },
-        "Rogers and supporters": {
+        "Rogers supporters": {
             "Rogers campaign": campaign["rogers"],
             "Pro-Rogers": outside[("rogers", "Support")],
             "Anti-Abdul": outside[("elsayed", "Oppose")],
