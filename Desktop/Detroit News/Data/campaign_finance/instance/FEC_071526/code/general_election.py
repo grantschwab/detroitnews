@@ -130,18 +130,6 @@ def _parties():
     return parties
 
 
-def _first_names():
-    """slug -> capitalized first name, straight from candidates_general.csv
-    (already lowercase there, e.g. "sean")."""
-    names = {}
-    with open(CANDIDATES_CSV, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            slug = row["candidate_name"]
-            if slug in ALL_SLUGS:
-                names[slug] = row["first_name"].capitalize()
-    return names
-
-
 def _outside_rows(output_dir):
     """List of dicts: slug, group, direction (Support/Oppose), all (SUM
     CandCategory), since_aug5 (Since Aug 5 Spent) -- one per (candidate,
@@ -310,7 +298,6 @@ def build_postprim_overview_rows(output_dir, credentials_path=None):
     last_names, outside, _unused_campaign_all = _build_data(output_dir)
     committee_ids = _committee_ids()
     parties = _parties()
-    first_names = _first_names()
 
     os.makedirs(_POSTPRIM_CACHE_DIR, exist_ok=True)
     slugs = [s for race in POSTPRIM_RACES for s in RACE_CANDIDATES[race]]
@@ -329,14 +316,12 @@ def build_postprim_overview_rows(output_dir, credentials_path=None):
 
         for slug, is_dem in ((dem_slug, True), (rep_slug, False)):
             own_slug, opp_slug = (dem_slug, rep_slug) if is_dem else (rep_slug, dem_slug)
-            first = first_names.get(slug, "")
             last = last_names.get(slug, slug.capitalize())
-            full_name = f"{first[:1]}. {last}".strip() if first else last
             campaign = campaign_since_cutoff[own_slug]
             pro = by_slug_direction.get((own_slug, "Support"), 0.0)
             anti_opp = by_slug_direction.get((opp_slug, "Oppose"), 0.0)
             total = campaign + pro + anti_opp
-            row = {"District": race, "Candidate": f"{full_name} ({race})", "Total": total}
+            row = {"District": race, "Candidate": f"{last} ({race})", "Total": total}
             for col in ("Campaign (D)", "Pro-Democrat", "Anti-GOP", "Campaign (R)", "Pro-GOP", "Anti-Democrat"):
                 row[col] = 0.0
             if is_dem:
