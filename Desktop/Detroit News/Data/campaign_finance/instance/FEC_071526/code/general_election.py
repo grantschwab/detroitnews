@@ -30,6 +30,7 @@ import urllib.parse
 import urllib.request
 
 from groupspend import format_group_name, _write_sheet
+from postprim_chart import _campaign_since_cutoff, CACHE_DIR as _POSTPRIM_CACHE_DIR, POSTPRIM_CUTOFF
 
 RACE_CANDIDATES = {
     "mi00": ["elsayed", "rogers"],
@@ -40,6 +41,12 @@ RACE_CANDIDATES = {
 }
 ALL_SLUGS = {slug for slugs in RACE_CANDIDATES.values() for slug in slugs}
 SLUG_TO_RACE = {slug: r for r, slugs in RACE_CANDIDATES.items() for slug in slugs}
+
+# Grant's pick for the "since Aug 5" POST_PRIM_overview tab -- the three
+# House races he wants tracked there. Senate has its own since-Aug-5 tab
+# (postprim_chart.py -> SEN_postprim_chart); MI-01 (Bergman/Barr) is
+# deliberately excluded, Grant's call.
+POSTPRIM_RACES = ["mi04", "mi07", "mi10"]
 
 HOUSE_SHEET_ID = "1sNSKOIxYzR7XrgbPCFPwfM5VwuBNkORpMqSkj5oE3j4"
 CANDIDATES_CSV = os.path.join(os.path.dirname(__file__), "candidates_general.csv")
@@ -99,6 +106,28 @@ def _resolve_last_names(cache_path):
     with open(cache_path, "w") as f:
         json.dump(cache, f, indent=2)
     return cache
+
+
+def _committee_ids():
+    """slug -> committee_id, straight from candidates_general.csv."""
+    ids = {}
+    with open(CANDIDATES_CSV, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            slug = row["candidate_name"]
+            if slug in ALL_SLUGS:
+                ids[slug] = row["committee_id"]
+    return ids
+
+
+def _parties():
+    """slug -> 'DEM' or 'REP', straight from candidates_general.csv."""
+    parties = {}
+    with open(CANDIDATES_CSV, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            slug = row["candidate_name"]
+            if slug in ALL_SLUGS:
+                parties[slug] = row["party"]
+    return parties
 
 
 def _outside_rows(output_dir):
@@ -246,7 +275,71 @@ def update_group_detail(output_dir, credentials_path, worksheet_name="gen_group_
     return rows
 
 
+POSTPRIM_OVERVIEW_COLUMNS = ["District", "Candidate", "Campaign (D)", "Pro-Democrat", "Anti-GOP",
+                             "Campaign (R)", "Pro-GOP", "Anti-Democrat", "Total"]
+
+
+def build_postprim_overview_rows(output_dir, credentials_path=None):
+    """One row per candidate (D and R) per race in POSTPRIM_RACES, windowed
+    to spending on/after POSTPRIM_CUTOFF for BOTH outside money and
+    campaign spend -- unlike build_candidate_position_rows, which mixes
+    since-Aug-5 outside money with cycle-to-date campaign spend. Columns
+    are party-generic (not per-candidate-name) since this tab spans three
+    different D/R pairs; each row only fills its own party's three
+    columns (Campaign/Pro-own-party/Anti-opponent), same convention
+    postprim_chart.py already uses for the Senate tab (SEN_postprim_chart
+    fills only "its own side"'s columns per row too, just keyed by
+    candidate name there since it's a single race).
+
+    Campaign side reuses postprim_chart._campaign_since_cutoff() (live
+    FastFEC pull off each candidate's most-recent filed report, $0 until
+    a report actually covers the window -- same caveat as the Senate
+    tab)."""
+    last_names, outside, _unused_campaign_all = _build_data(output_dir)
+    committee_ids = _committee_ids()
+    parties = _parties()
+
+    os.makedirs(_POSTPRIM_CACHE_DIR, exist_ok=True)
+    slugs = [s for race in POSTPRIM_RACES for s in RACE_CANDIDATES[race]]
+    campaign_since_cutoff = {slug: _campaign_since_cutoff(committee_ids[slug]) for slug in slugs}
+
+    by_slug_direction = {}
+    for r in outside:
+        key = (r["slug"], r["direction"])
+        by_slug_direction[key] = by_slug_direction.get(key, 0.0) + r["since_aug5"]
+
+    rows = []
+    for contest_id in POSTPRIM_RACES:
+        race = _race_label(contest_id)
+        dem_slug = next(s for s in RACE_CANDIDATES[contest_id] if parties[s] == "DEM")
+        rep_slug = next(s for s in RACE_CANDIDATES[contest_id] if parties[s] == "REP")
+
+        for slug, is_dem in ((dem_slug, True), (rep_slug, False)):
+            own_slug, opp_slug = (dem_slug, rep_slug) if is_dem else (rep_slug, dem_slug)
+            last = last_names.get(slug, slug.capitalize())
+            campaign = campaign_since_cutoff[own_slug]
+            pro = by_slug_direction.get((own_slug, "Support"), 0.0)
+            anti_opp = by_slug_direction.get((opp_slug, "Oppose"), 0.0)
+            total = campaign + pro + anti_opp
+            row = {"District": race, "Candidate": f"{last} ({race})", "Total": total}
+            for col in ("Campaign (D)", "Pro-Democrat", "Anti-GOP", "Campaign (R)", "Pro-GOP", "Anti-Democrat"):
+                row[col] = 0.0
+            if is_dem:
+                row["Campaign (D)"], row["Pro-Democrat"], row["Anti-GOP"] = campaign, pro, anti_opp
+            else:
+                row["Campaign (R)"], row["Pro-GOP"], row["Anti-Democrat"] = campaign, pro, anti_opp
+            rows.append(row)
+    return rows
+
+
+def update_postprim_overview(output_dir, credentials_path, worksheet_name="POST_PRIM_overview"):
+    rows = build_postprim_overview_rows(output_dir, credentials_path)
+    _write_sheet(rows, POSTPRIM_OVERVIEW_COLUMNS, HOUSE_SHEET_ID, credentials_path, worksheet_name)
+    return rows
+
+
 def update_all(output_dir, credentials_path):
     update_district_summary(output_dir, credentials_path)
     update_candidate_positions(output_dir, credentials_path)
     update_group_detail(output_dir, credentials_path)
+    update_postprim_overview(output_dir, credentials_path)
