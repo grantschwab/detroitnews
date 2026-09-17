@@ -77,8 +77,22 @@ ACRONYM_EXPANSIONS = {
     "EDF": "Environmental Defense Fund (EDF)",
 }
 
+# Whole-name overrides for committees whose filed name needs restructuring,
+# not just per-word acronym substitution -- e.g. the filed name puts "(AFP
+# ACTION)" as the abbreviation of the whole preceding phrase, but Grant
+# wants "AFP" read as short for just "Americans for Prosperity", with
+# "Action, Inc." after it, and the DBA aliases (CVA Action, Libre Action)
+# dropped as chart-label clutter. Checked against the raw, unformatted
+# name (case-insensitive) before the word-by-word logic below runs at all.
+FULL_NAME_OVERRIDES = {
+    "AMERICANS FOR PROSPERITY ACTION, INC. (AFP ACTION) DBA CVA ACTION AND DBA LIBRE ACTION":
+        "Americans for Prosperity (AFP) Action, Inc.",
+}
+
 
 def format_group_name(name):
+    if name.strip().upper() in FULL_NAME_OVERRIDES:
+        return FULL_NAME_OVERRIDES[name.strip().upper()]
     words = name.split(" ")
     out = []
     for i, word in enumerate(words):
