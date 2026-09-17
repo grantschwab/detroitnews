@@ -173,6 +173,34 @@ def _campaign_values(output_dir):
 MIN_TOTAL = 100000
 MIN_TOTAL_1M = 1000000
 
+# Raw (unformatted) "Outside Group" value for United Democracy Project, as
+# filed -- used to match rows for the UDP-only primary-era breakout below.
+UDP_RAW_NAME = "UNITED DEMOCRACY PROJECT ('UDP')"
+
+
+def _udp_anti_abdul_primary(output_dir):
+    """UDP's Anti-Abdul spend through the Aug 4 2026 primary only (SUM
+    CandCategory minus Since Aug 5 Spent -- there's no dedicated
+    "primary" period column in outside_spending_2026.csv, but everything
+    NOT in the post-Aug-5 bucket is by construction from on-or-before the
+    primary). One-off, UDP-specific column Grant asked for on
+    SEN_groups_chart_1M+ only -- not a general per-group primary
+    breakdown, so this isn't folded into _group_rows()."""
+    path = os.path.join(output_dir, "output", "outside_spending_2026.csv")
+    total = 0.0
+    if not os.path.exists(path):
+        return total
+    with open(path, newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            if (row.get("Outside Group", "").strip().upper() != UDP_RAW_NAME):
+                continue
+            if row.get("Candidate Name", "").strip().lower() != "elsayed":
+                continue
+            if row.get("Support/Oppose", "").strip() != "Oppose":
+                continue
+            total += _to_float(row.get("SUM CandCategory")) - _to_float(row.get("Since Aug 5 Spent"))
+    return total
+
 
 def _lean(values):
     """Which candidate a group's spending predominantly helps.
@@ -267,11 +295,18 @@ def update_groupspend_chart(output_dir, sheet_id, credentials_path, worksheet_na
     return rows
 
 
+OUTPUT_COLUMNS_1M = OUTPUT_COLUMNS + ["Anti-Abdul (primary)"]
+
+
 def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet_name="SEN_groups_chart_1M+"):
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("gspread not installed (pip install gspread google-auth)")
     rows = build_rows(output_dir, min_total=MIN_TOTAL_1M, max_rows=10)
-    _write_sheet(rows, OUTPUT_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    udp_primary = _udp_anti_abdul_primary(output_dir)
+    udp_display_name = format_group_name(UDP_RAW_NAME)
+    for row in rows:
+        row["Anti-Abdul (primary)"] = udp_primary if row["Group"] == udp_display_name else 0.0
+    _write_sheet(rows, OUTPUT_COLUMNS_1M, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
 
