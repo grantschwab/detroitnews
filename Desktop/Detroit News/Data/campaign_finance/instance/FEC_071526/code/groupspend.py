@@ -54,14 +54,15 @@ VALUE_COLUMNS = GROUP_COLUMNS
 # articles/prepositions lowercase except as the first word; everything else
 # gets normal Title Case.
 ACRONYMS = {"PAC", "PAF", "UDP", "AP", "DMFI", "JDCA", "LLC", "GOP", "DNC",
-            "RNC", "AIPAC", "NRA", "UAW", "SF", "SEIU", "COPE"}
+            "RNC", "AIPAC", "NRA", "UAW", "SF", "SEIU", "COPE",
+            "SLF", "GLCF", "AFSCME", "LCV", "EDF"}
 LOWERCASE_WORDS = {"a", "an", "the", "of", "for", "to", "in", "and", "or",
                     "on", "at", "by", "from", "with"}
 
 # Stylized brand names that don't follow normal Title Case (e.g. internal
 # capitals). Checked case-insensitively against each raw word before the
 # generic formatting rules below.
-BRAND_OVERRIDES = {"MOVEON.ORG": "MoveOn.org", "VOTEVETS": "VoteVets"}
+BRAND_OVERRIDES = {"MOVEON.ORG": "MoveOn.org", "VOTEVETS": "VoteVets", "WINSENATE": "WinSenate"}
 
 
 def format_group_name(name):
@@ -141,6 +142,7 @@ def _campaign_values(output_dir):
 
 
 MIN_TOTAL = 100000
+MIN_TOTAL_1M = 1000000
 
 
 def _lean(values):
@@ -152,7 +154,7 @@ def _lean(values):
     return "El-Sayed" if abdul_side >= rogers_side else "Rogers"
 
 
-def build_rows(output_dir):
+def build_rows(output_dir, min_total=MIN_TOTAL):
     group_rows = _group_rows(output_dir)
 
     rows = []
@@ -160,7 +162,7 @@ def build_rows(output_dir):
         rows.append({"Group": format_group_name(group), **values,
                      "Total": sum(values[c] for c in VALUE_COLUMNS)})
 
-    rows = [r for r in rows if r["Total"] >= MIN_TOTAL]
+    rows = [r for r in rows if r["Total"] >= min_total]
     rows.sort(key=lambda r: r["Total"], reverse=True)
     return rows
 
@@ -229,7 +231,15 @@ def _write_sheet(rows, columns, sheet_id, credentials_path, worksheet_name, blan
 def update_groupspend_chart(output_dir, sheet_id, credentials_path, worksheet_name="SEN_groups_chart_100k+"):
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("gspread not installed (pip install gspread google-auth)")
-    rows = build_rows(output_dir)
+    rows = build_rows(output_dir, min_total=MIN_TOTAL)
+    _write_sheet(rows, OUTPUT_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    return rows
+
+
+def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet_name="SEN_groups_chart_1M+"):
+    if not GSPREAD_AVAILABLE:
+        raise RuntimeError("gspread not installed (pip install gspread google-auth)")
+    rows = build_rows(output_dir, min_total=MIN_TOTAL_1M)
     _write_sheet(rows, OUTPUT_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 

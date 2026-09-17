@@ -822,6 +822,12 @@ def main():
                 print(f"  groupspend_chart update failed: {e}")
 
             try:
+                groupspend.update_groupspend_chart_1m(args.output_dir, args.sheet_id, args.credentials)
+                print("  groupspend_chart_1M updated.")
+            except Exception as e:
+                print(f"  groupspend_chart_1M update failed: {e}")
+
+            try:
                 groupspend.update_all_groups_chart(args.output_dir, args.sheet_id, args.credentials)
                 print("  groupspend_chart_ALL updated.")
             except Exception as e:
