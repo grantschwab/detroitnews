@@ -314,7 +314,7 @@ def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet
             row["Anti-Abdul"] = 0.0
         else:
             row["Anti-Abdul (primary only)"] = 0.0
-    _write_sheet(rows, OUTPUT_COLUMNS_1M, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
+    _write_sheet(rows, OUTPUT_COLUMNS_1M, GRAPHICS_SHEET_ID, credentials_path, worksheet_name, blank_zeros=True)
     return rows
 
 
