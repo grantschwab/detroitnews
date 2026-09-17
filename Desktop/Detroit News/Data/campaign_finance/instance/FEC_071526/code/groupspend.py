@@ -64,6 +64,19 @@ LOWERCASE_WORDS = {"a", "an", "the", "of", "for", "to", "in", "and", "or",
 # generic formatting rules below.
 BRAND_OVERRIDES = {"MOVEON.ORG": "MoveOn.org", "VOTEVETS": "VoteVets", "WINSENATE": "WinSenate"}
 
+# Well-known acronyms spelled out in-place as "Full Name (ABBREV)" --
+# confirmed with Grant 2026-09-. Checked before the plain ACRONYMS
+# uppercase-only handling below, so e.g. "SLF PAC" -> "Senate Leadership
+# Fund (SLF) PAC" (only the acronym word itself is replaced; the rest of
+# the committee's registered name is left as-is).
+ACRONYM_EXPANSIONS = {
+    "SLF": "Senate Leadership Fund (SLF)",
+    "GLCF": "Great Lakes Conservative Fund (GLCF)",
+    "AFSCME": "American Federation of State, County and Municipal Employees (AFSCME)",
+    "LCV": "League of Conservation Voters (LCV)",
+    "EDF": "Environmental Defense Fund (EDF)",
+}
+
 
 def format_group_name(name):
     words = name.split(" ")
@@ -81,6 +94,8 @@ def format_group_name(name):
             continue
         if core.upper() in BRAND_OVERRIDES:
             formatted = BRAND_OVERRIDES[core.upper()]
+        elif core.upper() in ACRONYM_EXPANSIONS:
+            formatted = ACRONYM_EXPANSIONS[core.upper()]
         elif core.upper() in ACRONYMS:
             formatted = core.upper()
         elif i != 0 and core.lower() in LOWERCASE_WORDS:
