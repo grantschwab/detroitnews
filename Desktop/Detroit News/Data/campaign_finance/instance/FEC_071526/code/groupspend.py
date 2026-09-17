@@ -305,7 +305,15 @@ def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet
     udp_primary = _udp_anti_abdul_primary(output_dir)
     udp_display_name = format_group_name(UDP_RAW_NAME)
     for row in rows:
-        row["Anti-Abdul (primary)"] = udp_primary if row["Group"] == udp_display_name else 0.0
+        if row["Group"] == udp_display_name:
+            row["Anti-Abdul (primary)"] = udp_primary
+            # UDP's whole-cycle Anti-Abdul spend is now shown in the
+            # dedicated primary column above instead -- zeroed here per
+            # Grant so it isn't shown in both places. Total is left
+            # untouched (still the true whole-cycle spend figure).
+            row["Anti-Abdul"] = 0.0
+        else:
+            row["Anti-Abdul (primary)"] = 0.0
     _write_sheet(rows, OUTPUT_COLUMNS_1M, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
