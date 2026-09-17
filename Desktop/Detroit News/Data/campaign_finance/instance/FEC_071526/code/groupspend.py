@@ -183,7 +183,7 @@ def _lean(values):
     return "El-Sayed" if abdul_side >= rogers_side else "Rogers"
 
 
-def build_rows(output_dir, min_total=MIN_TOTAL):
+def build_rows(output_dir, min_total=MIN_TOTAL, max_rows=None):
     group_rows = _group_rows(output_dir)
 
     rows = []
@@ -193,6 +193,8 @@ def build_rows(output_dir, min_total=MIN_TOTAL):
 
     rows = [r for r in rows if r["Total"] >= min_total]
     rows.sort(key=lambda r: r["Total"], reverse=True)
+    if max_rows is not None:
+        rows = rows[:max_rows]
     return rows
 
 
@@ -268,7 +270,7 @@ def update_groupspend_chart(output_dir, sheet_id, credentials_path, worksheet_na
 def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet_name="SEN_groups_chart_1M+"):
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("gspread not installed (pip install gspread google-auth)")
-    rows = build_rows(output_dir, min_total=MIN_TOTAL_1M)
+    rows = build_rows(output_dir, min_total=MIN_TOTAL_1M, max_rows=10)
     _write_sheet(rows, OUTPUT_COLUMNS, GRAPHICS_SHEET_ID, credentials_path, worksheet_name)
     return rows
 
