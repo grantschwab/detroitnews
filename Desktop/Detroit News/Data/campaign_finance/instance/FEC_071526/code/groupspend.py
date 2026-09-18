@@ -259,6 +259,155 @@ def build_all_rows(output_dir):
     return rows
 
 
+def build_backer_rows(output_dir, pro_column, anti_column):
+    """One row per outside group that spent on this candidate's side at
+    all (Pro + Anti > 0) -- no minimum threshold, unlike build_rows()'s
+    $100k/$1M floors, since these tabs are meant as a complete backer
+    reference list, not a chart-sized top-N. No campaign-committee row
+    (confirmed with Grant -- "backers" means outside groups only)."""
+    group_rows = _group_rows(output_dir)
+    rows = []
+    for group, values in group_rows.items():
+        pro = values.get(pro_column, 0.0)
+        anti = values.get(anti_column, 0.0)
+        total = pro + anti
+        if total <= 0:
+            continue
+        rows.append({"Group": format_group_name(group), pro_column: pro, anti_column: anti, "Total": total})
+    rows.sort(key=lambda r: -r["Total"])
+    return rows
+
+
+def _read_existing_notes(spreadsheet, worksheet_name, group_column="Group", note_column="Note"):
+    """Group -> Note, read from whatever's currently live in the sheet --
+    used so a live-refreshing backer tab never overwrites Grant's
+    hand-typed editorial notes. Returns {} if the tab doesn't exist yet
+    (first run) or doesn't have the expected columns."""
+    try:
+        ws = spreadsheet.worksheet(worksheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        return {}
+    values = ws.get_all_values()
+    if not values:
+        return {}
+    header = values[0]
+    if group_column not in header or note_column not in header:
+        return {}
+    g_idx, n_idx = header.index(group_column), header.index(note_column)
+    notes = {}
+    for row in values[1:]:
+        if len(row) > max(g_idx, n_idx) and row[g_idx]:
+            notes[row[g_idx]] = row[n_idx]
+    return notes
+
+
+def update_backer_chart(output_dir, credentials_path, worksheet_name, pro_column, anti_column, initial_notes):
+    """Shared implementation for the two per-candidate "backers" tabs.
+    Reads the sheet's CURRENT Note column first and carries each group's
+    existing value forward into the freshly-computed row before doing
+    the normal clear+rewrite -- so the note is never actually lost, just
+    re-included in the same full-sheet write every cycle. A brand-new
+    group (never seen in this tab before) gets seeded from
+    initial_notes; an existing group's note (even one Grant deliberately
+    left blank) is never replaced by initial_notes again."""
+    if not GSPREAD_AVAILABLE:
+        raise RuntimeError("gspread not installed (pip install gspread google-auth)")
+
+    rows = build_backer_rows(output_dir, pro_column, anti_column)
+    columns = ["Group", pro_column, anti_column, "Total", "Note"]
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_service_account_file(credentials_path, scopes=scopes)
+    gc = gspread.authorize(creds)
+    spreadsheet = gc.open_by_key(GRAPHICS_SHEET_ID)
+
+    existing_notes = _read_existing_notes(spreadsheet, worksheet_name)
+    for row in rows:
+        row["Note"] = existing_notes.get(row["Group"], initial_notes.get(row["Group"], ""))
+
+    try:
+        ws = spreadsheet.worksheet(worksheet_name)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = spreadsheet.add_worksheet(title=worksheet_name, rows=max(len(rows) + 10, 20), cols=10)
+
+    data = [columns] + [[r[c] for c in columns] for r in rows]
+    ws.clear()
+    ws.update(values=data, range_name="A1")
+    ws.format("A1:E1", {"textFormat": {"bold": True}})
+    # Only B:D (Pro/Anti/Total) get currency formatting -- E is the
+    # free-text Note column, must not be reformatted as a number.
+    ws.format(f"B2:D{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
+    ws.freeze(cols=1)
+    return rows
+
+
+# First-try editorial notes (Grant asked for a draft to edit, not final
+# copy) -- keyed by the formatted display name build_backer_rows()
+# produces, drafted 2026-09-18 against the real current group list on
+# each side. Cautious/generic where the group's specific identity isn't
+# well-established from general knowledge -- Grant should verify/replace
+# rather than trust these at face value.
+INITIAL_NOTES_ROGERS = {
+    "United Democracy Project ('UDP')": "AIPAC-aligned pro-Israel Super PAC",
+    "Senate Leadership Fund (SLF) PAC": "GOP Senate leadership-aligned Super PAC",
+    "Americans for Prosperity (AFP) Action, Inc.": "Koch network conservative Super PAC",
+    "Great Lakes Conservative Fund (GLCF), Inc.": "Michigan-focused conservative Super PAC",
+    "No Going Back PAC Inc.": "Conservative-aligned outside group",
+    "The Sentinel Action Fund": "Conservative Super PAC",
+    "America PAC": "Musk-founded pro-Trump Super PAC",
+    "First Principles Digital": "Conservative digital ad group",
+    "American Principles Project PAC": "Socially conservative advocacy group",
+    "American Political Action Committee": "Conservative-aligned outside group",
+    "A Stronger Michigan": "Michigan conservative-aligned group",
+    "The Front Line Action": "Conservative-aligned outside group",
+    "Red Senate": "GOP Senate-aligned outside group",
+    "The Conservative Caucus Dba Americans for Constitutional Liberty": "Conservative advocacy group",
+}
+
+INITIAL_NOTES_ELSAYED = {
+    "WinSenate": "Democratic-aligned Senate outside group",
+    "Defend the Vote": "Voting-rights-focused outside group",
+    "Fighting for Michigan PAC": "Michigan Democratic-aligned Super PAC",
+    "Environmental Defense Fund (EDF) Action Votes": "Environmental Defense Fund's political arm",
+    "League of Conservation Voters (LCV) Victory Fund": "Environmental advocacy group's Super PAC",
+    "Planned Parenthood Votes": "Reproductive-rights advocacy group",
+    "Giffords PAC": "Gun-safety group founded by Gabby Giffords",
+    "American Federation of State, County and Municipal Employees (AFSCME) Working Families Fund": "Public employees' union PAC",
+    "PAF": "Progressive-aligned outside group",
+    "National Nurses United for Patient Protection": "Nurses' union PAC",
+    "American Priorities (AP)": "Progressive-aligned outside group",
+    "Common Defense Action Fund": "Progressive veterans' advocacy group",
+    "Cffe PAC": "Progressive-aligned outside group",
+    "Working Families Party PAC": "Working Families Party's Super PAC",
+    "MoveOn.org Political Action": "Progressive advocacy group",
+    "Millions of Michiganians": "Michigan progressive-aligned group",
+    "For Michigan Action Fund": "Michigan progressive-aligned group",
+    "Citizens Against AIPAC Corruption": "Anti-AIPAC advocacy group",
+    "Unity & Justice Fund": "Progressive-aligned outside group",
+    "Workers Vote": "Labor-aligned outside group",
+    "Field Team 6, Inc.": "Progressive digital organizing group",
+    "Forward Blue": "Democratic-aligned law enforcement group",
+    "SF Solidarity PAC": "Progressive-aligned outside group",
+    "Emgage Federal Political Action Committee": "Muslim American advocacy group",
+    "Community Change Voters": "Progressive racial-justice advocacy group",
+    "Indivisible Action": "Grassroots progressive movement's Super PAC",
+    "Michigan Democratic State Central Committee": "Michigan Democratic Party committee",
+    "International Alliance of Theatrical Stage Employees Federal Speech PAC": "Entertainment-industry stagehands' union PAC",
+    "End the Occupation": "Palestine-solidarity-focused group",
+    "The People United PAC": "Progressive-aligned outside group",
+}
+
+
+def update_rogers_backers_chart(output_dir, credentials_path, worksheet_name="SEN_backers_Rogers"):
+    return update_backer_chart(output_dir, credentials_path, worksheet_name,
+                                "Pro-Rogers", "Anti-Abdul", INITIAL_NOTES_ROGERS)
+
+
+def update_elsayed_backers_chart(output_dir, credentials_path, worksheet_name="SEN_backers_Abdul"):
+    return update_backer_chart(output_dir, credentials_path, worksheet_name,
+                                "Pro-Abdul", "Anti-Rogers", INITIAL_NOTES_ELSAYED)
+
+
 def _write_sheet(rows, columns, sheet_id, credentials_path, worksheet_name, blank_zeros=False):
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
