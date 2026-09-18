@@ -52,10 +52,17 @@ into "out of state" by default.
 
 col_b_* fields (e.g. col_b_total_receipts,
 col_b_individual_contributions_unitemized) are already cycle-to-date
-cumulative on each filed report -- read from the single most recent
-filing only, never summed across filings (same convention already used
-elsewhere in this codebase, e.g. postprim_chart.py's self-reported YTD
-handling).
+cumulative on each filed report -- BUT this module does NOT read
+col_b_total_receipts off the raw filing (an earlier version did).
+Confirmed real 2026-09-21: Rogers' own filed col_b_total_receipts
+doesn't match api.open.fec.gov's independently-recomputed totals for
+the same committee/period -- a filer-side self-reported-top-line
+inconsistency (his own numbers don't fully reconcile), not a parsing
+bug. See _committee_totals()'s docstring for the full story, including
+how this was caught (Grant compared against FEC.gov's own displayed
+total) and why El-Sayed's number was unaffected (his raw field happened
+to match exactly). Total and Small dollar (unitemized) both now come
+from committee/{id}/totals/ instead, FEC's own authoritative aggregate.
 
 Not yet observed in the cached data: El-Sayed has zero JFC-routed
 contributions as of this writing (he may not be using a joint
@@ -151,17 +158,11 @@ def _relevant_filings(committee_id):
     return sorted(best.values(), key=lambda r: r.get("coverage_start_date") or "")
 
 
-def _most_recent_filing(filings):
-    """The single filing with the latest coverage_end_date -- used for
-    col_b_* cumulative fields, which must come from exactly one report,
-    never summed across reports."""
-    return max(filings, key=lambda r: r.get("coverage_end_date") or "") if filings else None
-
-
 def _download_filing(file_number):
-    """Downloads and parses one filing's SA11AI.csv, SA12.csv, and F3
-    summary rows via FastFEC, caching the combined result to disk by
-    file_number. Returns a dict: {"ind_rows": [...], "summary": {...}}."""
+    """Downloads and parses one filing's SA11AI.csv and SA12.csv rows via
+    FastFEC, caching to disk by file_number. Returns just the itemized
+    entity_type=IND rows -- NOT the filing's own self-reported summary
+    totals (see _committee_totals() for why)."""
     cache_path = os.path.join(CACHE_DIR, f"{file_number}.json")
     if os.path.exists(cache_path):
         with open(cache_path) as f:
@@ -188,60 +189,66 @@ def _download_filing(file_number):
                     "amount": row.get("contribution_amount"),
                 })
 
-    summary = {}
-    for form in ("F3A.csv", "F3N.csv"):
-        form_path = os.path.join(filing_dir, form)
-        if os.path.exists(form_path):
-            with open(form_path, newline="", encoding="utf-8") as f:
-                row = next(csv.DictReader(f), None)
-            if row:
-                summary = {
-                    "col_b_total_receipts": row.get("col_b_total_receipts"),
-                    "col_b_individual_contributions_unitemized": row.get("col_b_individual_contributions_unitemized"),
-                    "coverage_end_date": row.get("coverage_through_date"),
-                }
-            break
-
-    if result.returncode != 0 and not ind_rows and not summary:
+    if result.returncode != 0 and not ind_rows:
         print(f"    (FastFEC failed for file {file_number}: {result.stderr[:200]})")
 
-    data = {"ind_rows": ind_rows, "summary": summary}
     with open(cache_path, "w") as f:
-        json.dump(data, f)
-    return data
+        json.dump(ind_rows, f)
+    return ind_rows
+
+
+def _committee_totals(committee_id):
+    """Total receipts and unitemized individual contributions, straight
+    from api.open.fec.gov's own committee/{id}/totals/ endpoint -- NOT
+    read off the raw filing's self-reported col_b_total_receipts field.
+
+    Confirmed real 2026-09-21 (Grant flagged Rogers' number as "slightly
+    off" vs. FEC.gov's own displayed total): Rogers' own 12P filing's
+    col_b_total_receipts field ($10,945,823.94-ish) does NOT match
+    api.open.fec.gov's independently-recomputed "receipts" aggregate for
+    the same committee/period ($10,833,276.21) -- a filer-side
+    self-reported-top-line inconsistency, not a bug in how this script
+    reads the field (the same field-reading code produced a byte-exact
+    match against the totals endpoint for El-Sayed, $14,514,335.93 both
+    ways, so the raw field is usually fine -- just not reliable enough to
+    trust blindly). The totals endpoint is FEC's own authoritative
+    recomputed number and is what FEC.gov's committee page is built on,
+    so it's used here instead. A small residual gap can still exist
+    between this and FEC.gov's live page -- confirmed for Rogers that his
+    committee filed nine 48-hour notices (Form 6, ~$107,847 total)
+    between July 17 and Aug 3 for large late pre-primary contributions
+    that aren't reflected in any periodic report yet (Q3 isn't due until
+    October) but ARE folded into FEC.gov's running "total raised"
+    display. Not incorporated here -- would need a separate Form 6 pull
+    per committee, and Form 6 amounts get properly captured once the next
+    periodic report is filed anyway."""
+    data = query_fec(f"committee/{committee_id}/totals/", {"cycle": 2026, "per_page": 5})
+    results = data.get("results", [])
+    if not results:
+        return 0.0, 0.0
+    r = results[0]
+    return _to_float(r.get("receipts")), _to_float(r.get("individual_unitemized_contributions"))
 
 
 def _candidate_totals(committee_id):
     filings = _relevant_filings(committee_id)
-    if not filings:
-        return {"Itemized (Michigan)": 0.0, "Itemized (out of state)": 0.0,
-                "Small dollar (unitemized)": 0.0, "Other": 0.0, "Total": 0.0}
 
     itemized_mi = 0.0
     itemized_oos = 0.0
-    latest_summary = {}
-    latest_coverage_end = ""
-
     for filing in filings:
         file_number = filing["file_number"]
         print(f"  {filing['report_type']:<4} {filing.get('coverage_start_date')}..{filing.get('coverage_end_date')} "
               f"file={file_number}", end=" ")
-        parsed = _download_filing(file_number)
-        print(f"-> {len(parsed['ind_rows'])} itemized IND rows")
-        for row in parsed["ind_rows"]:
+        ind_rows = _download_filing(file_number)
+        print(f"-> {len(ind_rows)} itemized IND rows")
+        for row in ind_rows:
             amount = _to_float(row["amount"])
             if row["state"] == "MI":
                 itemized_mi += amount
             else:
                 itemized_oos += amount
 
-        coverage_end = parsed["summary"].get("coverage_end_date") or filing.get("coverage_end_date") or ""
-        if coverage_end >= latest_coverage_end:
-            latest_coverage_end = coverage_end
-            latest_summary = parsed["summary"]
-
-    total_receipts = _to_float(latest_summary.get("col_b_total_receipts"))
-    unitemized = _to_float(latest_summary.get("col_b_individual_contributions_unitemized"))
+    total_receipts, unitemized = _committee_totals(committee_id)
     other = total_receipts - itemized_mi - itemized_oos - unitemized
 
     return {
