@@ -259,15 +259,25 @@ def build_all_rows(output_dir):
     return rows
 
 
-def build_backer_rows(output_dir, pro_column, anti_column):
+def build_backer_rows(output_dir, pro_column, anti_column, exclude_raw_names=()):
     """One row per outside group that spent on this candidate's side at
     all (Pro + Anti > 0) -- no minimum threshold, unlike build_rows()'s
     $100k/$1M floors, since these tabs are meant as a complete backer
     reference list, not a chart-sized top-N. No campaign-committee row
-    (confirmed with Grant -- "backers" means outside groups only)."""
+    (confirmed with Grant -- "backers" means outside groups only).
+
+    exclude_raw_names: raw (unformatted) "Outside Group" values to leave
+    out entirely -- e.g. UDP on the Rogers tab, per Grant (2026-09-22):
+    almost all of UDP's Anti-Abdul spend is primary-era, already broken
+    out separately on SEN_groups_chart_1M+, and Grant is adding his own
+    explanatory note about it rather than showing it as a Rogers backer
+    here."""
+    exclude = {n.strip().upper() for n in exclude_raw_names}
     group_rows = _group_rows(output_dir)
     rows = []
     for group, values in group_rows.items():
+        if group.strip().upper() in exclude:
+            continue
         pro = values.get(pro_column, 0.0)
         anti = values.get(anti_column, 0.0)
         total = pro + anti
@@ -301,7 +311,8 @@ def _read_existing_notes(spreadsheet, worksheet_name, group_column="Group", note
     return notes
 
 
-def update_backer_chart(output_dir, credentials_path, worksheet_name, pro_column, anti_column, initial_notes):
+def update_backer_chart(output_dir, credentials_path, worksheet_name, pro_column, anti_column, initial_notes,
+                         exclude_raw_names=()):
     """Shared implementation for the two per-candidate "backers" tabs.
     Reads the sheet's CURRENT Note column first and carries each group's
     existing value forward into the freshly-computed row before doing
@@ -313,7 +324,7 @@ def update_backer_chart(output_dir, credentials_path, worksheet_name, pro_column
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("gspread not installed (pip install gspread google-auth)")
 
-    rows = build_backer_rows(output_dir, pro_column, anti_column)
+    rows = build_backer_rows(output_dir, pro_column, anti_column, exclude_raw_names=exclude_raw_names)
     columns = ["Group", pro_column, anti_column, "Total", "Note"]
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
@@ -399,8 +410,11 @@ INITIAL_NOTES_ELSAYED = {
 
 
 def update_rogers_backers_chart(output_dir, credentials_path, worksheet_name="SEN_backers_Rogers"):
+    # UDP excluded per Grant (2026-09-22) -- see build_backer_rows()'s
+    # exclude_raw_names docstring.
     return update_backer_chart(output_dir, credentials_path, worksheet_name,
-                                "Pro-Rogers", "Anti-Abdul", INITIAL_NOTES_ROGERS)
+                                "Pro-Rogers", "Anti-Abdul", INITIAL_NOTES_ROGERS,
+                                exclude_raw_names=(UDP_RAW_NAME,))
 
 
 def update_elsayed_backers_chart(output_dir, credentials_path, worksheet_name="SEN_backers_Abdul"):
