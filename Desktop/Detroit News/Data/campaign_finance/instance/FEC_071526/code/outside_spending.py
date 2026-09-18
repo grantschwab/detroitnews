@@ -73,6 +73,40 @@ try:
 except ImportError:
     GSPREAD_AVAILABLE = False
 
+
+def _retry_on_quota(fn, *args, retries=4, base_delay=20, **kwargs):
+    """Every sheet-update call in this file's main loop goes through this
+    -- as of 2026-09, the loop now writes to a dozen-plus tabs each cycle
+    (postprim_chart, groupspend's three tabs, general_election's four,
+    fundraising_totals, the two backer tabs, race_totals, ...), and each
+    tab write is itself several gspread calls (clear/update/format/
+    freeze), so a cycle with little new data to fetch (nothing cached
+    needs re-downloading) can burst past Google Sheets' per-minute
+    write-request quota. Confirmed real, twice (2026-09-22): a
+    "backer tabs update failed: APIError: [429] Quota exceeded" line in
+    the log, with the affected tab left however it was after whichever
+    gspread call inside it failed (usually still fine, since ws.clear()
+    and ws.update() are back-to-back, but not guaranteed). Retries with
+    growing backoff (20s, 40s, 80s, 160s) specifically on a 429/quota
+    error; any other exception (or the last retry) propagates immediately
+    so the existing per-tab try/except in main() still logs and moves on
+    rather than blocking the whole cycle indefinitely."""
+    last_error = None
+    for attempt in range(retries):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:
+            msg = str(e)
+            if "429" not in msg and "Quota exceeded" not in msg:
+                raise
+            last_error = e
+            if attempt < retries - 1:
+                delay = base_delay * (2 ** attempt)
+                print(f"    (quota hit, retrying in {delay}s: {msg[:150]})")
+                time.sleep(delay)
+    raise last_error
+
+
 BASE_URL = "https://api.open.fec.gov/v1"
 FEC_DOCQUERY_TMPL = "https://docquery.fec.gov/dcdev/posted/{file_number}.fec"
 RSS_BASE_URL = "https://efilingapps.fec.gov/rss/generate"
@@ -800,62 +834,62 @@ def main():
 
         if args.sheet_id and os.path.exists(args.credentials):
             try:
-                upload_to_sheets(rows, args.sheet_id, args.credentials, args.worksheet)
+                _retry_on_quota(upload_to_sheets, rows, args.sheet_id, args.credentials, args.worksheet)
                 print("  Sheets updated.")
             except Exception as e:
                 print(f"  Sheets upload failed: {e}")
 
             try:
-                overallspend.update_overallspend_chart(args.output_dir, args.sheet_id, args.credentials)
+                _retry_on_quota(overallspend.update_overallspend_chart, args.output_dir, args.sheet_id, args.credentials)
                 print("  overallspend_chart updated.")
             except Exception as e:
                 print(f"  overallspend_chart update failed: {e}")
 
             try:
-                postprim_chart.update_postprim_chart(args.output_dir, args.credentials)
+                _retry_on_quota(postprim_chart.update_postprim_chart, args.output_dir, args.credentials)
                 print("  postprim_chart updated.")
             except Exception as e:
                 print(f"  postprim_chart update failed: {e}")
 
             try:
-                groupspend.update_groupspend_chart(args.output_dir, args.sheet_id, args.credentials)
+                _retry_on_quota(groupspend.update_groupspend_chart, args.output_dir, args.sheet_id, args.credentials)
                 print("  groupspend_chart updated.")
             except Exception as e:
                 print(f"  groupspend_chart update failed: {e}")
 
             try:
-                groupspend.update_groupspend_chart_1m(args.output_dir, args.sheet_id, args.credentials)
+                _retry_on_quota(groupspend.update_groupspend_chart_1m, args.output_dir, args.sheet_id, args.credentials)
                 print("  groupspend_chart_1M updated.")
             except Exception as e:
                 print(f"  groupspend_chart_1M update failed: {e}")
 
             try:
-                groupspend.update_all_groups_chart(args.output_dir, args.sheet_id, args.credentials)
+                _retry_on_quota(groupspend.update_all_groups_chart, args.output_dir, args.sheet_id, args.credentials)
                 print("  groupspend_chart_ALL updated.")
             except Exception as e:
                 print(f"  groupspend_chart_ALL update failed: {e}")
 
             try:
-                general_election.update_all(args.output_dir, args.credentials)
+                _retry_on_quota(general_election.update_all, args.output_dir, args.credentials)
                 print("  General election tabs updated.")
             except Exception as e:
                 print(f"  General election tabs update failed: {e}")
 
             try:
-                fundraising_totals.update(args.output_dir, args.credentials)
+                _retry_on_quota(fundraising_totals.update, args.output_dir, args.credentials)
                 print("  fundraising_totals updated.")
             except Exception as e:
                 print(f"  fundraising_totals update failed: {e}")
 
             try:
-                groupspend.update_rogers_backers_chart(args.output_dir, args.credentials)
-                groupspend.update_elsayed_backers_chart(args.output_dir, args.credentials)
+                _retry_on_quota(groupspend.update_rogers_backers_chart, args.output_dir, args.credentials)
+                _retry_on_quota(groupspend.update_elsayed_backers_chart, args.output_dir, args.credentials)
                 print("  backer tabs updated.")
             except Exception as e:
                 print(f"  backer tabs update failed: {e}")
 
             try:
-                race_totals.update(args.output_dir, args.credentials)
+                _retry_on_quota(race_totals.update, args.output_dir, args.credentials)
                 print("  race_totals updated.")
             except Exception as e:
                 print(f"  race_totals update failed: {e}")
