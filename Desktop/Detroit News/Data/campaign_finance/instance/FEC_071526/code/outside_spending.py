@@ -64,6 +64,7 @@ import postprim_chart
 import groupspend
 import general_election
 import fundraising_totals
+import race_totals
 
 try:
     import gspread
@@ -852,6 +853,12 @@ def main():
                 print("  backer tabs updated.")
             except Exception as e:
                 print(f"  backer tabs update failed: {e}")
+
+            try:
+                race_totals.update(args.output_dir, args.credentials)
+                print("  race_totals updated.")
+            except Exception as e:
+                print(f"  race_totals update failed: {e}")
 
         if args.once:
             print("\nSingle pass complete.")
