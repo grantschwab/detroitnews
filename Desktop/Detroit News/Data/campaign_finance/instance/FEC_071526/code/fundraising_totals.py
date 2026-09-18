@@ -213,15 +213,23 @@ def _committee_totals(committee_id):
     ways, so the raw field is usually fine -- just not reliable enough to
     trust blindly). The totals endpoint is FEC's own authoritative
     recomputed number and is what FEC.gov's committee page is built on,
-    so it's used here instead. A small residual gap can still exist
-    between this and FEC.gov's live page -- confirmed for Rogers that his
-    committee filed nine 48-hour notices (Form 6, ~$107,847 total)
-    between July 17 and Aug 3 for large late pre-primary contributions
-    that aren't reflected in any periodic report yet (Q3 isn't due until
-    October) but ARE folded into FEC.gov's running "total raised"
-    display. Not incorporated here -- would need a separate Form 6 pull
-    per committee, and Form 6 amounts get properly captured once the next
-    periodic report is filed anyway."""
+    so it's used here instead.
+
+    A small residual gap (~$65k for Rogers, well under 1%) can still
+    exist between this and FEC.gov's live page. TESTED AND RULED OUT
+    2026-09-21: Form 6 (48-hour notice) contributions filed since the
+    last periodic report -- Rogers had 13 such filings since his 12P
+    report (not just the 9 originally spotted), totaling ~$217,649, all
+    confirmed non-amended and non-duplicate (checked amendment_indicator
+    and per-transaction date/amount/state). Adding that in looked
+    promising for Rogers alone, but applying the exact same logic to
+    El-Sayed (whose Total was independently confirmed correct against
+    FEC.gov) would have pushed his number from $14,514,336 to
+    $15,385,463 -- i.e. WRONG. That disproves the hypothesis: FEC.gov's
+    displayed "total raised" does NOT simply add unreported Form 6 money
+    on top of the last periodic report. Whatever accounts for the
+    remaining small gap, it isn't this -- don't re-attempt the Form 6
+    approach without a new theory first."""
     data = query_fec(f"committee/{committee_id}/totals/", {"cycle": 2026, "per_page": 5})
     results = data.get("results", [])
     if not results:
