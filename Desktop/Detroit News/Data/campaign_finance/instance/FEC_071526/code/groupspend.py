@@ -458,7 +458,7 @@ def update_groupspend_chart(output_dir, sheet_id, credentials_path, worksheet_na
     return rows
 
 
-OUTPUT_COLUMNS_1M = OUTPUT_COLUMNS + ["Anti-Abdul (primary only)"]
+OUTPUT_COLUMNS_1M = OUTPUT_COLUMNS + ["Anti-Abdul (primary only)", "Total"]
 
 
 def update_groupspend_chart_1m(output_dir, sheet_id, credentials_path, worksheet_name="SEN_groups_chart_1M+"):
