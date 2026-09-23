@@ -112,7 +112,13 @@ def update(output_dir, credentials_path, worksheet_name="RogersElSayed_test"):
     except gspread.exceptions.WorksheetNotFound:
         ws = spreadsheet.add_worksheet(title=worksheet_name, rows=20, cols=10)
 
-    data = [OUTPUT_COLUMNS] + [[r[c] for c in OUTPUT_COLUMNS] for r in rows]
+    def cell(r, c):
+        v = r[c]
+        if isinstance(v, (int, float)) and v == 0:
+            return ""
+        return v
+
+    data = [OUTPUT_COLUMNS] + [[cell(r, c) for c in OUTPUT_COLUMNS] for r in rows]
     ws.clear()
     ws.update(values=data, range_name="A1")
     last_col = chr(64 + len(OUTPUT_COLUMNS))
