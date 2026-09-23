@@ -373,6 +373,9 @@ INITIAL_NOTES_ROGERS = {
     "The Front Line Action": "Conservative-aligned outside group",
     "Red Senate": "GOP Senate-aligned outside group",
     "The Conservative Caucus Dba Americans for Constitutional Liberty": "Conservative advocacy group",
+    "High Plains PAC": "Conservative-aligned outside group",
+    "Associated Builders and Contractors, Inc. Political Action Committee (Abc PAC)": "Construction industry trade association's group",
+    "NRA Victory Fund, Inc.": "NRA's political group",
 }
 
 INITIAL_NOTES_ELSAYED = {
@@ -406,6 +409,9 @@ INITIAL_NOTES_ELSAYED = {
     "International Alliance of Theatrical Stage Employees Federal Speech PAC": "Entertainment-industry stagehands' union group",
     "End the Occupation": "Palestine-solidarity-focused group",
     "The People United PAC": "Progressive-aligned outside group",
+    "Progressive Turnout Project": "Progressive voter-turnout group",
+    "Activate America": "Progressive-aligned outside group",
+    "Givegreen United Action": "Environmental advocacy group",
 }
 
 
