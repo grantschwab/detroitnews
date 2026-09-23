@@ -65,6 +65,7 @@ import groupspend
 import general_election
 import fundraising_totals
 import race_totals
+import rogers_elsayed_test
 
 try:
     import gspread
@@ -893,6 +894,12 @@ def main():
                 print("  race_totals updated.")
             except Exception as e:
                 print(f"  race_totals update failed: {e}")
+
+            try:
+                _retry_on_quota(rogers_elsayed_test.update, args.output_dir, args.credentials)
+                print("  RogersElSayed_test updated.")
+            except Exception as e:
+                print(f"  RogersElSayed_test update failed: {e}")
 
         if args.once:
             print("\nSingle pass complete.")

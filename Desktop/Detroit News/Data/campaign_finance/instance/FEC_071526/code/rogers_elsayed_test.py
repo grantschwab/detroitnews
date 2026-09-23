@@ -17,16 +17,13 @@ SEN_postprim_chart themselves are untouched -- this exclusion is local
 to this tab only, same pattern as the UDP-specific column already added
 to SEN_groups_chart_1M+ in groupspend.py.
 
-Not wired into the continuous pipeline (this is explicitly a one-off
-experiment, not a permanent tab) -- run manually:
+Wired into outside_spending.py's 30-minute live-refresh loop as of
+2026-09-23 (Grant confirmed he wants it live, not just a one-off) --
+same _retry_on_quota-wrapped pattern every other graphics tab there
+follows. Can still be run standalone for testing:
 
     export FEC_API_KEY="..."
     python3 rogers_elsayed_test.py
-
-If Grant likes the combined layout and wants it live-updating every
-cycle like the other Flourish tabs, add a call to update(...) alongside
-the other graphics-tab calls in outside_spending.py's main() loop --
-same pattern every other tab there already follows.
 """
 
 import csv
