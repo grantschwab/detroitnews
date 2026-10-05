@@ -26,7 +26,10 @@ who retired rather than ran (Gary Peters in 2026, Debbie Stabenow in
 status="C" -- their committees are just winding down, they were never
 actual candidates in the race being measured here.
 
-"Candidate" total = disbursements (money actually SPENT, not raised) via
+"Candidate" total = operating expenditures (money actually spent on the
+race -- excludes transfers to other committees and refunds to donors,
+which would otherwise double-count money or inflate the total; matches
+OpenSecrets' basis, confirmed 2024 against their $218.2M figure) via
 each committee's own committee/{id}/totals/ endpoint, cycle-to-date.
 "Outside group" total = every outside group's Schedule E independent
 expenditures against ANY candidate in CANDIDATES_2026/2024 below (not
@@ -114,7 +117,7 @@ def _candidate_spend(committee_ids, cycle):
         data = osp.query_fec(f"committee/{committee_id}/totals/", {"cycle": cycle, "per_page": 5})
         results = data.get("results", [])
         if results:
-            total += _to_float(results[0].get("disbursements"))
+            total += _to_float(results[0].get("operating_expenditures"))
     return total
 
 
