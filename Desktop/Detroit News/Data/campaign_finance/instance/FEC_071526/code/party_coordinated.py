@@ -8,7 +8,7 @@ summed without a label.
 
 Party committees: DSCC, NRSC, DCCC, NRCC, Michigan Democratic Party, Michigan Republican
 Party. Covers MI Senate (candidate_office "S") and MI House (candidate_office "H"); the
-Race column distinguishes them. Note: the NRCC's main committee is C00075820 (its
+Race column distinguishes them. Note: the NRSC main committee is C00027466 (C00091009 is a contributions account with no Schedule F). The NRCC's main committee is C00075820 (its
 C00002931 account carries no Schedule F).
 
 Wired into outside_spending.py's live loop, writing the "SEN_party_coordinated" tab.
@@ -33,7 +33,7 @@ BASE_URL = "https://api.open.fec.gov/v1"
 GRAPHICS_SHEET_ID = "1H2aq1gKbCV-9jcDs5ee2wIJeQdOAIeMQ_iLm1RbLUgY"
 PARTY_COMMITTEES = {
     "DSCC": "C00042366",
-    "NRSC": "C00091009",
+    "NRSC": "C00027466",
     "DCCC": "C00000935",
     "NRCC": "C00075820",
     "Michigan Democratic Party": "C00031054",
