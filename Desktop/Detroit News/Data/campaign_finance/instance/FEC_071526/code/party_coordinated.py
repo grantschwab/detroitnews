@@ -6,9 +6,10 @@ national and state party committees that make them. Kept separate from
 outside_spending.py's independent expenditures (Schedule E) so the two are never
 summed without a label.
 
-Party committees: DSCC, NRSC, Michigan Democratic Party, Michigan Republican Party.
-Schedule F rows for House candidates (e.g. NRCC rows) are excluded by checking
-candidate_office == "S" and candidate_office_state == "MI".
+Party committees: DSCC, NRSC, DCCC, NRCC, Michigan Democratic Party, Michigan Republican
+Party. Covers MI Senate (candidate_office "S") and MI House (candidate_office "H"); the
+Race column distinguishes them. Note: the NRCC's main committee is C00075820 (its
+C00002931 account carries no Schedule F).
 
 Wired into outside_spending.py's live loop, writing the "SEN_party_coordinated" tab.
 """
@@ -33,10 +34,12 @@ GRAPHICS_SHEET_ID = "1H2aq1gKbCV-9jcDs5ee2wIJeQdOAIeMQ_iLm1RbLUgY"
 PARTY_COMMITTEES = {
     "DSCC": "C00042366",
     "NRSC": "C00091009",
+    "DCCC": "C00000935",
+    "NRCC": "C00075820",
     "Michigan Democratic Party": "C00031054",
     "Michigan Republican Party": "C00041160",
 }
-OUTPUT_COLUMNS = ["Party committee", "Candidate", "Coordinated spending"]
+OUTPUT_COLUMNS = ["Party committee", "Race", "Candidate", "Coordinated spending"]
 
 
 def _to_float(value):
@@ -91,13 +94,15 @@ def build_rows():
         for r in _schedule_f_rows(committee_id):
             if (r.get("candidate_office_state") or "").upper() != "MI":
                 continue
-            if (r.get("candidate_office") or "").upper() != "S":
+            office = (r.get("candidate_office") or "").upper()
+            if office not in ("S", "H"):
                 continue
+            race = "Senate" if office == "S" else f"MI-{(r.get('candidate_office_district') or '').zfill(2)}"
             candidate = (r.get("candidate_name") or "").strip().title()
-            totals[(party, candidate)] += _to_float(r.get("expenditure_amount"))
+            totals[(party, race, candidate)] += _to_float(r.get("expenditure_amount"))
     rows = [
-        {"Party committee": party, "Candidate": candidate, "Coordinated spending": round(amount, 2)}
-        for (party, candidate), amount in totals.items()
+        {"Party committee": party, "Race": race, "Candidate": candidate, "Coordinated spending": round(amount, 2)}
+        for (party, race, candidate), amount in totals.items()
     ]
     rows.sort(key=lambda r: -r["Coordinated spending"])
     return rows
@@ -116,13 +121,13 @@ def update(output_dir, credentials_path, worksheet_name="SEN_party_coordinated")
     try:
         ws = spreadsheet.worksheet(worksheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        ws = spreadsheet.add_worksheet(title=worksheet_name, rows=max(len(rows) + 10, 20), cols=5)
+        ws = spreadsheet.add_worksheet(title=worksheet_name, rows=max(len(rows) + 10, 20), cols=6)
 
     data = [OUTPUT_COLUMNS] + [[r[c] for c in OUTPUT_COLUMNS] for r in rows]
     ws.clear()
     ws.update(values=data, range_name="A1")
-    ws.format("A1:C1", {"textFormat": {"bold": True}})
-    ws.format(f"C2:C{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
+    ws.format("A1:D1", {"textFormat": {"bold": True}})
+    ws.format(f"D2:D{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
 
     return rows
 
