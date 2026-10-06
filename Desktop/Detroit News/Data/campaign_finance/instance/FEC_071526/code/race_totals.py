@@ -158,7 +158,7 @@ def build_rows(output_dir):
             "Candidates": round(candidate_total, 2),
             "Party coordinated": round(party_values.senate_total(output_dir), 2) if year == 2026 else "",
             "Outside groups": round(outside_total, 2),
-            "Total": round(candidate_total + outside_total, 2),
+            "Total": round(candidate_total + outside_total + (party_values.senate_total(output_dir) if year == 2026 else 0), 2),
         })
     return rows
 

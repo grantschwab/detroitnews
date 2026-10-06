@@ -93,9 +93,9 @@ def build_rows(output_dir):
 
     rows = []
     for row in overallspend.build_rows(output_dir):
-        rows.append({"Period": "Since 2025 campaign launch", **_add_party(row, output_dir, cycle_periods), **_exclude_udp(row, udp_whole_cycle)})
+        rows.append({"Period": "Since 2025 campaign launch", **_exclude_udp(row, udp_whole_cycle), **_add_party(_exclude_udp(row, udp_whole_cycle), output_dir, cycle_periods)})
     for row in postprim_chart.build_rows(output_dir):
-        rows.append({"Period": "Post-primary", **_add_party(row, output_dir, ("Since Aug 1 Spent",)), **_exclude_udp(row, udp_since_aug5)})
+        rows.append({"Period": "Post-primary", **_exclude_udp(row, udp_since_aug5), **_add_party(_exclude_udp(row, udp_since_aug5), output_dir, ("Since Aug 1 Spent",))})
     return rows
 
 
@@ -106,6 +106,7 @@ def _add_party(row, output_dir, periods):
         out["Party group (D)"] = party_values.for_candidate(output_dir, "elsayed", "D", periods)
     if row["Category"].startswith("Rogers"):
         out["Party group (R)"] = party_values.for_candidate(output_dir, "rogers", "R", periods)
+    out["Total"] = row["Total"] + out["Party group (D)"] + out["Party group (R)"]
     return out
 
 

@@ -321,7 +321,8 @@ def build_postprim_overview_rows(output_dir, credentials_path=None):
             campaign = campaign_since_cutoff[own_slug]
             pro = by_slug_direction.get((own_slug, "Support"), 0.0)
             anti_opp = by_slug_direction.get((opp_slug, "Oppose"), 0.0)
-            total = campaign + pro + anti_opp
+            party = party_values.for_candidate(output_dir, slug, "D" if is_dem else "R")
+            total = campaign + pro + anti_opp + party
             row = {"District": race, "Candidate": f"{last} ({race})", "Total": total}
             for col in ("Campaign (D)", "Party group (D)", "Pro-Democrat", "Anti-GOP", "Campaign (R)", "Party group (R)", "Pro-GOP", "Anti-Democrat"):
                 row[col] = 0.0
