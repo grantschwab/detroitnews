@@ -67,6 +67,7 @@ import fundraising_totals
 import race_totals
 import rogers_elsayed_test
 import party_coordinated
+import coordinated_spend
 
 try:
     import gspread
@@ -907,6 +908,12 @@ def main():
                 print("  party_coordinated updated.")
             except Exception as e:
                 print(f"  party_coordinated update failed: {e}")
+
+            try:
+                _retry_on_quota(coordinated_spend.update, args.output_dir, args.credentials)
+                print("  coordinated_spend updated.")
+            except Exception as e:
+                print(f"  coordinated_spend update failed: {e}")
 
         if args.once:
             print("\nSingle pass complete.")
