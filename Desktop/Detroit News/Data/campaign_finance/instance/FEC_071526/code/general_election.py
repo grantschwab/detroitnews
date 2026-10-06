@@ -30,6 +30,7 @@ import urllib.parse
 import urllib.request
 
 from groupspend import format_group_name, _write_sheet
+import party_values
 from postprim_chart import _campaign_since_cutoff, CACHE_DIR as _POSTPRIM_CACHE_DIR, POSTPRIM_CUTOFF
 
 RACE_CANDIDATES = {
@@ -275,8 +276,8 @@ def update_group_detail(output_dir, credentials_path, worksheet_name="gen_group_
     return rows
 
 
-POSTPRIM_OVERVIEW_COLUMNS = ["District", "Candidate", "Campaign (D)", "Pro-Democrat", "Anti-GOP",
-                             "Campaign (R)", "Pro-GOP", "Anti-Democrat", "Total"]
+POSTPRIM_OVERVIEW_COLUMNS = ["District", "Candidate", "Campaign (D)", "Party group (D)", "Pro-Democrat", "Anti-GOP",
+                             "Campaign (R)", "Party group (R)", "Pro-GOP", "Anti-Democrat", "Total"]
 
 
 def build_postprim_overview_rows(output_dir, credentials_path=None):
@@ -322,8 +323,10 @@ def build_postprim_overview_rows(output_dir, credentials_path=None):
             anti_opp = by_slug_direction.get((opp_slug, "Oppose"), 0.0)
             total = campaign + pro + anti_opp
             row = {"District": race, "Candidate": f"{last} ({race})", "Total": total}
-            for col in ("Campaign (D)", "Pro-Democrat", "Anti-GOP", "Campaign (R)", "Pro-GOP", "Anti-Democrat"):
+            for col in ("Campaign (D)", "Party group (D)", "Pro-Democrat", "Anti-GOP", "Campaign (R)", "Party group (R)", "Pro-GOP", "Anti-Democrat"):
                 row[col] = 0.0
+            row["Party group (D)"] = party_values.for_candidate(output_dir, slug, "D") if is_dem else 0.0
+            row["Party group (R)"] = party_values.for_candidate(output_dir, slug, "R") if not is_dem else 0.0
             if is_dem:
                 row["Campaign (D)"], row["Pro-Democrat"], row["Anti-GOP"] = campaign, pro, anti_opp
             else:

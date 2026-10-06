@@ -30,6 +30,7 @@ import csv
 import os
 
 import overallspend
+import party_values
 import postprim_chart
 
 try:
@@ -40,8 +41,8 @@ except ImportError:
     GSPREAD_AVAILABLE = False
 
 GRAPHICS_SHEET_ID = overallspend.GRAPHICS_SHEET_ID  # same "Michigan_SEN_spend" spreadsheet
-OUTPUT_COLUMNS = ["Period", "Category", "El-Sayed campaign", "Rogers campaign", "Pro-Abdul",
-                  "Anti-Rogers", "Pro-Rogers", "Anti-Abdul", "Total"]
+OUTPUT_COLUMNS = ["Period", "Category", "El-Sayed campaign", "Rogers campaign", "Party group (D)", "Party group (R)",
+                  "Pro-Abdul", "Anti-Rogers", "Pro-Rogers", "Anti-Abdul", "Total"]
 
 
 UDP_RAW_NAME = "UNITED DEMOCRACY PROJECT ('UDP')"
@@ -88,13 +89,24 @@ def _exclude_udp(row, udp_amount):
 
 def build_rows(output_dir):
     udp_whole_cycle, udp_since_aug5 = _udp_anti_abdul(output_dir)
+    cycle_periods = ("2025 Spent", "Q1 2026 Spent", "Q2 2026 Spent", "Since Aug 1 Spent")
 
     rows = []
     for row in overallspend.build_rows(output_dir):
-        rows.append({"Period": "Since 2025 campaign launch", **_exclude_udp(row, udp_whole_cycle)})
+        rows.append({"Period": "Since 2025 campaign launch", **_add_party(row, output_dir, cycle_periods), **_exclude_udp(row, udp_whole_cycle)})
     for row in postprim_chart.build_rows(output_dir):
-        rows.append({"Period": "Post-primary", **_exclude_udp(row, udp_since_aug5)})
+        rows.append({"Period": "Post-primary", **_add_party(row, output_dir, ("Since Aug 1 Spent",)), **_exclude_udp(row, udp_since_aug5)})
     return rows
+
+
+def _add_party(row, output_dir, periods):
+    """Party group (D) on the El-Sayed row (DSCC), Party group (R) on the Rogers row (NRSC)."""
+    out = {"Party group (D)": 0.0, "Party group (R)": 0.0}
+    if row["Category"].startswith("El-Sayed"):
+        out["Party group (D)"] = party_values.for_candidate(output_dir, "elsayed", "D", periods)
+    if row["Category"].startswith("Rogers"):
+        out["Party group (R)"] = party_values.for_candidate(output_dir, "rogers", "R", periods)
+    return out
 
 
 def update(output_dir, credentials_path, worksheet_name="RogersElSayed_test"):

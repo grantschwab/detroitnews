@@ -49,6 +49,7 @@ Called at the end of outside_spending.py's own sheet-upload step.
 import os
 
 import outside_spending as osp
+import party_values
 
 CANDIDATES_2026 = {
     # DEM primary
@@ -94,7 +95,7 @@ CANDIDATES_2024 = {
 }
 
 GRAPHICS_SHEET_ID = osp.__dict__.get("GRAPHICS_SHEET_ID") or "1H2aq1gKbCV-9jcDs5ee2wIJeQdOAIeMQ_iLm1RbLUgY"
-OUTPUT_COLUMNS = ["Year", "Candidates", "Outside groups", "Total"]
+OUTPUT_COLUMNS = ["Year", "Candidates", "Party coordinated", "Outside groups", "Total"]
 
 try:
     import gspread
@@ -144,7 +145,7 @@ def _outside_spend(candidates, cycle):
 YEAR_LABELS = {2024: "2024", 2026: "2026 (so far)"}
 
 
-def build_rows():
+def build_rows(output_dir):
     rows = []
     for year, candidates in ((2024, CANDIDATES_2024), (2026, CANDIDATES_2026)):
         print(f"{year}:")
@@ -155,6 +156,7 @@ def build_rows():
         rows.append({
             "Year": YEAR_LABELS[year],
             "Candidates": round(candidate_total, 2),
+            "Party coordinated": round(party_values.senate_total(output_dir), 2) if year == 2026 else "",
             "Outside groups": round(outside_total, 2),
             "Total": round(candidate_total + outside_total, 2),
         })
@@ -165,7 +167,7 @@ def update(output_dir, credentials_path, worksheet_name="SEN_race_totals"):
     if not GSPREAD_AVAILABLE:
         raise RuntimeError("gspread not installed (pip install gspread google-auth)")
 
-    rows = build_rows()
+    rows = build_rows(output_dir)
 
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_service_account_file(credentials_path, scopes=scopes)
@@ -179,13 +181,13 @@ def update(output_dir, credentials_path, worksheet_name="SEN_race_totals"):
     data = [OUTPUT_COLUMNS] + [[r[c] for c in OUTPUT_COLUMNS] for r in rows]
     ws.clear()
     ws.update(values=data, range_name="A1")
-    ws.format("A1:D1", {"textFormat": {"bold": True}})
-    ws.format(f"B2:D{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
+    ws.format("A1:E1", {"textFormat": {"bold": True}})
+    ws.format(f"B2:E{len(rows) + 1}", {"numberFormat": {"type": "CURRENCY", "pattern": "#,##0"}})
 
     return rows
 
 
 if __name__ == "__main__":
-    rows = build_rows()
+    rows = build_rows("..")
     for row in rows:
         print(row)
