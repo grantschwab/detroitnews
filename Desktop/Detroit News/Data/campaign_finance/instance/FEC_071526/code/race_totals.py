@@ -144,6 +144,29 @@ def _outside_spend(candidates, cycle):
 
 YEAR_LABELS = {2024: "2024", 2026: "2026 (so far)"}
 
+SENATE_PARTY_COMMITTEES = {"DSCC": "C00042366", "NRSC": "C00027466"}
+
+
+def _party_senate_2024():
+    """Schedule F coordinated spending in the 2024 MI Senate race (Slotkin/Rogers), from the
+    DSCC and NRSC. Checked directly 2026-10-06: DSCC $1,959,000 (Slotkin), NRSC $1,589,974 (Rogers)."""
+    import party_coordinated as pc
+    total = 0.0
+    for cid in SENATE_PARTY_COMMITTEES.values():
+        last = None
+        while True:
+            params = {"committee_id": cid, "cycle": 2024, "per_page": 100}
+            if last:
+                params["last_index"] = last
+            d = pc.query_fec("schedules/schedule_f/", params)
+            for r in d.get("results", []):
+                if (r.get("candidate_office_state") or "").upper() == "MI" and (r.get("candidate_office") or "").upper() == "S":
+                    total += _to_float(r.get("expenditure_amount"))
+            last = (d.get("pagination", {}).get("last_indexes") or {}).get("last_index")
+            if not d.get("results") or not last:
+                break
+    return total
+
 
 def build_rows(output_dir):
     rows = []
@@ -153,12 +176,13 @@ def build_rows(output_dir):
         print(f"  candidate disbursements: ${candidate_total:,.0f}")
         outside_total = _outside_spend(candidates, year)
         print(f"  outside group spend: ${outside_total:,.0f}")
+        party = party_values.senate_total(output_dir) if year == 2026 else _party_senate_2024()
         rows.append({
             "Year": YEAR_LABELS[year],
             "Candidates": round(candidate_total, 2),
-            "Party coordinated": round(party_values.senate_total(output_dir), 2) if year == 2026 else "",
+            "Party coordinated": round(party, 2),
             "Outside groups": round(outside_total, 2),
-            "Total": round(candidate_total + outside_total + (party_values.senate_total(output_dir) if year == 2026 else 0), 2),
+            "Total": round(candidate_total + outside_total + party, 2),
         })
     return rows
 
